@@ -425,7 +425,8 @@ class InputManager: ObservableObject {
 
         Task {
             do {
-                try await client.hidPrint(text: trimmed)
+                let keymap: String? = try? await client.getSystemConfig().keymap
+                try await client.hidPrint(text: trimmed, keymap: keymap)
             } catch {
                 print("Paste to remote failed: \(error)")
             }
@@ -1041,3 +1042,4 @@ extension InputManager {
         return true
     }
 }
+
