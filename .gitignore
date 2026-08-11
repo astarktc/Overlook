@@ -32,3 +32,6 @@ janus/
 # .swiftpm
 .build/
 
+
+# Pi/Claude conversation logs (local only)
+docs/conversation-logs/
