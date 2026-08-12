@@ -107,10 +107,10 @@ class WebRTCManager: NSObject, ObservableObject {
     private var latencyMeasurementStart: Date?
 
     private var lastConnectedDevice: KVMDevice?
-    private var lastCodecPreference: CodecPreference = .auto
     private var codecSelectionState: CodecSelectionState?
     private var fallbackMemory: FallbackMemory = .none
     private var suppressFrameArrivalSignalsForWatchdogTesting = false
+    private let codecPreferenceStore = CodecPreferenceStore()
 
     private let audioDevicesListenerQueue = DispatchQueue(label: "com.overlook.audio-device-change")
     private var audioDevicesListenerBlock: AudioObjectPropertyListenerBlock?
@@ -329,19 +329,30 @@ class WebRTCManager: NSObject, ObservableObject {
             defer { self.isAutoReconnectInProgress = false }
             await self.reconnect(
                 to: device,
-                codecPreference: lastCodecPreference,
+                codecPreference: self.codecPreferenceStore.preference(forDeviceID: device.id),
                 connectionKind: .automaticReconnect
             )
         }
     }
     
-    func connect(
-        to device: KVMDevice,
-        codecPreference: CodecPreference = .auto
-    ) async throws {
+    func codecPreference(for device: KVMDevice) -> CodecPreference {
+        codecPreferenceStore.preference(forDeviceID: device.id)
+    }
+
+    func setCodecPreference(_ codecPreference: CodecPreference, for device: KVMDevice) async {
+        codecPreferenceStore.save(codecPreference, forDeviceID: device.id)
+        guard isConnected else { return }
+        await reconnect(
+            to: device,
+            codecPreference: codecPreferenceStore.preference(forDeviceID: device.id),
+            connectionKind: .operatorInitiatedConnect(.codecPreferenceChange)
+        )
+    }
+
+    func connect(to device: KVMDevice) async throws {
         try await connect(
             to: device,
-            codecPreference: codecPreference,
+            codecPreference: codecPreferenceStore.preference(forDeviceID: device.id),
             connectionKind: .operatorInitiatedConnect(.deviceSelection)
         )
     }
@@ -359,7 +370,6 @@ class WebRTCManager: NSObject, ObservableObject {
         applyCodecSelectionState(initialCodecSelectionState)
 
         lastConnectedDevice = device
-        lastCodecPreference = codecPreference
         setupWebRTC()
 
         guard let factory = factory else {
@@ -436,13 +446,10 @@ class WebRTCManager: NSObject, ObservableObject {
         }
     }
 
-    func reconnect(
-        to device: KVMDevice,
-        codecPreference: CodecPreference = .auto
-    ) async {
+    func reconnect(to device: KVMDevice) async {
         await reconnect(
             to: device,
-            codecPreference: codecPreference,
+            codecPreference: codecPreferenceStore.preference(forDeviceID: device.id),
             connectionKind: .operatorInitiatedConnect(.manualReconnect)
         )
     }

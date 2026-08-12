@@ -2,6 +2,7 @@
 import SwiftUI
 import AppKit
 
+// swiftlint:disable:next type_body_length
 struct WebUISettingsPanel: View {
     @EnvironmentObject var webRTCManager: WebRTCManager
     @EnvironmentObject var inputManager: InputManager
@@ -46,6 +47,7 @@ struct WebUISettingsPanel: View {
     @State private var isProgrammaticEdidSelectionUpdate: Bool = false
 
     @State private var selectedVideoQualityPreset: Int = 1
+    @State private var codecPreference: CodecPreference = .auto
 
     @State private var applyTask: Task<Void, Never>?
     @State private var applyStreamerTask: Task<Void, Never>?
@@ -69,6 +71,9 @@ struct WebUISettingsPanel: View {
 
     private var streamerFeatures: GLKVMStreamerState.Features? { streamerState?.features }
     private var streamerLimits: GLKVMStreamerState.Limits? { streamerState?.limits }
+    private var settingsLoadID: String {
+        "\(isPresented)|\(kvmDeviceManager.connectedDevice?.id ?? "none")"
+    }
 
     private enum StreamerField: Hashable {
         case fps
@@ -242,6 +247,14 @@ struct WebUISettingsPanel: View {
                             .onChange(of: modeBinding.wrappedValue) { _, newValue in
                                 webRTCManager.setPreferLowLatencyPlayout(newValue == "low_latency_first")
                             }
+
+                            Picker("Codec Preference", selection: codecPreferenceBinding) {
+                                Text("Auto").tag(CodecPreference.auto)
+                                Text("H.265").tag(CodecPreference.h265)
+                                Text("H.264").tag(CodecPreference.h264)
+                            }
+                            .pickerStyle(.segmented)
+                            .disabled(kvmDeviceManager.connectedDevice == nil)
 
                             Picker("Quality", selection: $selectedVideoQualityPreset) {
                                 Text("Low").tag(0)
@@ -716,7 +729,7 @@ struct WebUISettingsPanel: View {
         .sheet(isPresented: $showingErrorHistory) {
             ErrorHistorySheet(entries: errorHistory)
         }
-        .task(id: isPresented) {
+        .task(id: settingsLoadID) {
             guard isPresented else { return }
             await load()
         }
@@ -853,6 +866,14 @@ struct WebUISettingsPanel: View {
     }
 
     private func load() async {
+        await MainActor.run {
+            if let device = kvmDeviceManager.connectedDevice {
+                codecPreference = webRTCManager.codecPreference(for: device)
+            } else {
+                codecPreference = .auto
+            }
+        }
+
         guard let client = kvmDeviceManager.glkvmClient else {
             await MainActor.run {
                 config = nil
@@ -1119,6 +1140,23 @@ struct WebUISettingsPanel: View {
                 }
                 streamerResolution = newValue
                 scheduleStreamerApply()
+            }
+        )
+    }
+
+    private var codecPreferenceBinding: Binding<CodecPreference> {
+        Binding(
+            get: { codecPreference },
+            set: { newPreference in
+                codecPreference = newPreference
+                guard let device = kvmDeviceManager.connectedDevice else { return }
+                Task { @MainActor in
+                    let wasConnected = webRTCManager.isConnected
+                    await webRTCManager.setCodecPreference(newPreference, for: device)
+                    if wasConnected, let reason = webRTCManager.lastDisconnectReason {
+                        recordError("Failed to reconnect WebRTC: \(reason)")
+                    }
+                }
             }
         )
     }

@@ -52,6 +52,8 @@
 		01000034 /* SDPOfferParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000033 /* SDPOfferParser.swift */; };
 		01000035 /* SDPOfferParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000033 /* SDPOfferParser.swift */; };
 		01000036 /* SDPOfferParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000034 /* SDPOfferParserTests.swift */; };
+		01000037 /* CodecPreferenceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000035 /* CodecPreferenceStore.swift */; };
+		01000038 /* CodecPreferenceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000035 /* CodecPreferenceStore.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -99,6 +101,7 @@
 		02000032 /* H265DecoderTestSupport.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = H265DecoderTestSupport.m; sourceTree = "<group>"; };
 		02000033 /* SDPOfferParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SDPOfferParser.swift; sourceTree = "<group>"; };
 		02000034 /* SDPOfferParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SDPOfferParserTests.swift; sourceTree = "<group>"; };
+		02000035 /* CodecPreferenceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodecPreferenceStore.swift; sourceTree = "<group>"; };
 		03000001 /* Overlook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Overlook.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		03000002 /* OverlookTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OverlookTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -142,6 +145,7 @@
 			children = (
 				02000001 /* OverlookApp.swift */,
 				02000026 /* CodecSelectionPolicy.swift */,
+				02000035 /* CodecPreferenceStore.swift */,
 				02000033 /* SDPOfferParser.swift */,
 				02000002 /* ContentView.swift */,
 				02000019 /* ContentControlBar.swift */,
@@ -331,6 +335,7 @@
 			files = (
 				01000001 /* OverlookApp.swift in Sources */,
 				01000024 /* CodecSelectionPolicy.swift in Sources */,
+				01000037 /* CodecPreferenceStore.swift in Sources */,
 				01000034 /* SDPOfferParser.swift in Sources */,
 				01000002 /* ContentView.swift in Sources */,
 				0100001A /* ContentControlBar.swift in Sources */,
@@ -363,6 +368,7 @@
 			files = (
 				01000020 /* OverlookTests.swift in Sources */,
 				01000025 /* CodecSelectionPolicy.swift in Sources */,
+				01000038 /* CodecPreferenceStore.swift in Sources */,
 				01000035 /* SDPOfferParser.swift in Sources */,
 				01000036 /* SDPOfferParserTests.swift in Sources */,
 				01000026 /* CodecSelectionPolicyTests.swift in Sources */,

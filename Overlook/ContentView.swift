@@ -1,7 +1,9 @@
+// swiftlint:disable file_length
 import SwiftUI
 import Foundation
 import AppKit
 
+// swiftlint:disable:next type_body_length
 struct ContentView: View {
     @EnvironmentObject var webRTCManager: WebRTCManager
     @EnvironmentObject var inputManager: InputManager
@@ -270,6 +272,14 @@ struct ContentView: View {
             .offset(x: showingConnections ? 0 : 360)
             .animation(.easeInOut(duration: 0.2), value: showingConnections)
             .allowsHitTesting(showingConnections)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            StatusBarView(
+                deviceName: kvmDeviceManager.connectedDevice?.name ?? selectedDevice?.name ?? "No Device",
+                isConnected: webRTCManager.isConnected,
+                latency: webRTCManager.latency,
+                negotiatedCodec: webRTCManager.negotiatedCodec
+            )
         }
         .background(WindowAspectRatioSetter(videoSize: webRTCManager.videoSize))
         .background(WindowTitleSetter(title: windowTitle))
@@ -599,6 +609,7 @@ private struct WindowReferenceSetter: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
+        // swiftlint:disable:next identifier_name
         guard let w = nsView.window else { return }
         if window !== w {
             DispatchQueue.main.async {

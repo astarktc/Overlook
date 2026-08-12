@@ -1,5 +1,5 @@
 /// The operator's client-side Codec Preference for a device.
-public enum CodecPreference: Equatable, Sendable {
+public enum CodecPreference: String, Equatable, Sendable {
   case auto
   case h265
   case h264

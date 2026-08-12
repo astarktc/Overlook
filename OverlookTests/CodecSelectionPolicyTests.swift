@@ -1,3 +1,4 @@
+import Foundation
 import XCTest
 
 final class CodecSelectionPolicyTests: XCTestCase {
@@ -306,5 +307,34 @@ final class CodecSelectionPolicyTests: XCTestCase {
   func testVideoFormatWireValuesMatchWatchRequestContract() {
     XCTAssertEqual(VideoFormat.h264.rawValue, 0)
     XCTAssertEqual(VideoFormat.h265.rawValue, 1)
+  }
+}
+
+final class CodecPreferenceStoreTests: XCTestCase {
+  func testDefaultsToAutoWhenDeviceHasNoStoredCodecPreference() {
+    let (store, defaults, suiteName) = makeStore()
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+
+    XCTAssertEqual(store.preference(forDeviceID: "manual-device-a"), .auto)
+  }
+
+  func testCodecPreferencesAreIndependentByDeviceID() {
+    let (store, defaults, suiteName) = makeStore()
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+
+    store.save(.h264, forDeviceID: "manual-device-a")
+    store.save(.h265, forDeviceID: "saved-device-b")
+
+    let reloadedStore = CodecPreferenceStore(defaults: defaults)
+    XCTAssertEqual(reloadedStore.preference(forDeviceID: "manual-device-a"), .h264)
+    XCTAssertEqual(reloadedStore.preference(forDeviceID: "saved-device-b"), .h265)
+    XCTAssertEqual(reloadedStore.preference(forDeviceID: "manual-device-c"), .auto)
+  }
+
+  private func makeStore() -> (CodecPreferenceStore, UserDefaults, String) {
+    let suiteName = "CodecPreferenceStoreTests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suiteName)!
+    defaults.removePersistentDomain(forName: suiteName)
+    return (CodecPreferenceStore(defaults: defaults), defaults, suiteName)
   }
 }
