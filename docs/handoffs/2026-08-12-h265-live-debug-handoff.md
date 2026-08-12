@@ -41,11 +41,25 @@ Operator tried Safari→GL web UI: it did NOT come up H.265 this time. Previousl
 2. GL packetizer **strips** parameter sets from the RTP path entirely (and has no `sprop-*` fmtp — offer carries only `profile-id=1`). If so, NO libwebrtc client can ever work, and Safari-working-previously needs re-explaining (WebKit may accept out-of-band-less streams differently or the earlier success needs re-verification).
 3. Parameter sets ARE in-AU but something subtler (e.g. AP aggregation quirk, donl/sprop assumptions) breaks assembly-continuity.
 
-Discriminating evidence needed (now possible with device access via BDA):
+### Researcher findings (COMPLETE — full brief: `.pi-subagents/artifacts/04d3d513_researcher_0_output.md`; read it before device work)
 
-- On-device capture of the Janus plugin's outgoing RTP (pre-SRTP if possible) or the plugin source/binary: look at NAL types 32/33/34 packets and their RTP timestamps vs the IDR (type 19) packets.
-- GL's GPL source for the Janus ustreamer plugin H.265 packetization path (researcher may have found this — check its artifact).
-- Restore device `video_format: 1` and re-run the Safari check to re-establish (or refute) WebKit tolerance.
+The packetizer research superseded the ranking above. Key facts (primary-sourced, citations in the brief):
+
+- **GL's ustreamer/Janus fork source is NOT published** (GPL request open, `gl-inet/glkvm` is Python kvmd only) — line-level certainty is unobtainable; empirical wire capture is the only path.
+- **Upstream pikvm/ustreamer's packetizer shape would already satisfy libwebrtc**: one 90kHz timestamp per access unit (`us_rtpv_wrap()` computes `pts` once), every NALU as its own single-NALU RTP packet (no AP/STAP — and that's fine: libwebrtc accepts separate packets sharing the IDR's timestamp), marker bit on last NALU only. Upstream is H.264-only; every H.265 byte on the device is GL-authored. So this is likely a **GL regression vs the upstream shape**.
+- **libwebrtc M150's rules (verified in source)**: (1) `H26xPacketBuffer::BeginningOfStream()` = `HasVps(packet)` — no in-band VPS ⇒ zero frames forever, silently; (2) an IRAP's timestamp group must contain VPS+SPS+PPS; (3) **out-of-band `sprop-*` is explicitly unsupported for H.265** — no field trial, no escape hatch.
+- **Refined hypotheses**: **H1 (most likely): VPS/SPS/PPS never make it into the RTP stream** (stripped by GL's NALU filter or moved to `sprop-*` fmtp) — the only hypothesis yielding exactly `framesReceived=0`. H2: per-NALU timestamps put parameter sets in a different frame than the IDR — also yields 0. H3 (separate param-set AU with own marker) is argued AGAINST by `framesReceived=0` (those would assemble as frames).
+- **Safari is NOT a valid oracle**: WebKit ships its own independently-written HEVC RFC 7798 stack with resilience patches feeding VideoToolbox, which tolerates parameter sets as a separate preceding AU. Safari working ≠ wire format is libwebrtc-acceptable.
+- **Client-side workarounds**: essentially none worth doing (SDP-munge to H.264 = what our fallback already achieves gracefully; a GStreamer re-packetizing relay is out of product scope; insertable streams can't help — they sit downstream of the discarding buffer).
+- **Device-side remedy (needs GL patch — no config flag exists; GL deliberately hides H.265, "patent issues" per staff forum post)**: keep VPS/SPS/PPS in-band with the IDR's timestamp, marker on last NALU — ~5-line diff in their `rtpv` H.265 branch if it diverged from upstream's shape.
+
+Discriminating evidence to collect (now possible with device access via BDA):
+
+1. **Fastest (seconds): grep the device rootfs / plugin** — `rg 'sprop|H265/90000' /usr/lib/janus/plugins/libjanus_ustreamer.so` (+ `strings` it). `sprop-vps` present in the SDP template ≈ near-proof of H1.
+2. **Check the actual offer fmtp**: our probes log only `includesH265` — capture the full `m=video` section of the device's offer (one-line instrumentation addition in `handleOfferSDP`, or read it off the device). `sprop-*` present ⇒ H1.
+3. **Decisive: per-RTP-packet trace `(seq, timestamp, marker, NAL type = (b0>>1)&0x3F)`** via a non-libwebrtc client attached to the same Janus plugin (aiortc or `gst webrtcbin`) — discriminates H1/H2/H3 in one capture. Look for types 32/33/34 vs 19, timestamp equality, marker placement, and any type 48/49 usage.
+4. Re-confirm the memsink AU shape on rm10-1.9.0 (`ustreamer-dump`, as BDA did for the fixtures) — decides which remedy applies.
+5. Restore device `video_format: 1` and re-run the Safari check — but per above, treat it only as a sanity signal, not an oracle.
 
 ## Live environment state
 
@@ -68,7 +82,7 @@ Discriminating evidence needed (now possible with device access via BDA):
 
 ## Next actions (in order)
 
-1. Collect the packetizer researcher's artifact (`gl-janus-h265-packetizer-research`); fold its findings into the hypothesis ranking.
+1. ~~Collect the packetizer researcher's artifact~~ DONE — folded in above; read the full brief at `.pi-subagents/artifacts/04d3d513_researcher_0_output.md`.
 2. Get device access from BDA via intercom; restore/verify device H.265 mode; re-run the Safari cross-check.
 3. Discriminate the packetization hypotheses with on-device evidence (plugin source/binary, RTP capture). THEN decide the remedy: device-side plugin fix (coordinate via BDA/LAB-28), protocol workaround, or — worst case — accept H.264 until GL fixes packetization (Overlook already degrades gracefully and visibly).
 4. When live H.265 flows: strip `[DEBUG-h265]` instrumentation (revert/adapt `cb36037`; grep the tag), rebuild, reinstall, complete tickets 04–07 live checkboxes and ticket 08 acceptance, mirror outcome to LAB-28 via BDA.
