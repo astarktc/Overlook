@@ -54,6 +54,13 @@ public enum WatchdogEvent: Equatable, Sendable {
   case watchdogFired
 }
 
+/// A side effect the manager must perform for a codec-selection transition.
+///
+/// Codec branching remains policy-owned; the manager only executes this command.
+public enum CodecSelectionAction: Equatable, Sendable {
+  case reissueVideoWatchRequest(VideoFormat)
+}
+
 /// A pure codec-selection transition result.
 public struct CodecSelectionState: Equatable, Sendable {
   /// The Video Format for the next video Watch Request.
@@ -64,6 +71,12 @@ public struct CodecSelectionState: Equatable, Sendable {
 
   /// Session-scoped Fallback memory to retain for a later Automatic Reconnect.
   public let fallbackMemory: FallbackMemory
+
+  /// A one-shot command produced by this transition.
+  public let action: CodecSelectionAction?
+
+  /// Whether an H.265 negotiation is waiting for its first decoded frame.
+  public let isFirstFrameWatchdogArmed: Bool
 
   fileprivate let h264NegotiatedCodec: NegotiatedCodec
 }
@@ -93,6 +106,8 @@ public enum CodecSelectionPolicy {
         videoFormatForWatchRequest: .h264,
         negotiatedCodec: nil,
         fallbackMemory: .none,
+        action: nil,
+        isFirstFrameWatchdogArmed: false,
         h264NegotiatedCodec: .h264
       )
 
@@ -102,6 +117,8 @@ public enum CodecSelectionPolicy {
           videoFormatForWatchRequest: .h264,
           negotiatedCodec: nil,
           fallbackMemory: .h264,
+          action: nil,
+          isFirstFrameWatchdogArmed: false,
           h264NegotiatedCodec: .h264Fallback
         )
       }
@@ -110,6 +127,8 @@ public enum CodecSelectionPolicy {
         videoFormatForWatchRequest: .h265,
         negotiatedCodec: nil,
         fallbackMemory: memoryAfterConnectionStarts,
+        action: nil,
+        isFirstFrameWatchdogArmed: false,
         h264NegotiatedCodec: .h264Fallback
       )
     }
@@ -128,6 +147,8 @@ public enum CodecSelectionPolicy {
         videoFormatForWatchRequest: .h264,
         negotiatedCodec: state.h264NegotiatedCodec,
         fallbackMemory: state.fallbackMemory,
+        action: nil,
+        isFirstFrameWatchdogArmed: false,
         h264NegotiatedCodec: state.h264NegotiatedCodec
       )
     }
@@ -140,6 +161,8 @@ public enum CodecSelectionPolicy {
       videoFormatForWatchRequest: .h265,
       negotiatedCodec: .h265,
       fallbackMemory: state.fallbackMemory,
+      action: nil,
+      isFirstFrameWatchdogArmed: true,
       h264NegotiatedCodec: .h264Fallback
     )
   }
@@ -149,8 +172,15 @@ public enum CodecSelectionPolicy {
     _ watchdogEvent: WatchdogEvent,
     state: CodecSelectionState
   ) -> CodecSelectionState {
-    guard state.videoFormatForWatchRequest == .h265 else {
-      return state
+    guard state.isFirstFrameWatchdogArmed else {
+      return CodecSelectionState(
+        videoFormatForWatchRequest: state.videoFormatForWatchRequest,
+        negotiatedCodec: state.negotiatedCodec,
+        fallbackMemory: state.fallbackMemory,
+        action: nil,
+        isFirstFrameWatchdogArmed: false,
+        h264NegotiatedCodec: state.h264NegotiatedCodec
+      )
     }
 
     switch watchdogEvent {
@@ -159,6 +189,8 @@ public enum CodecSelectionPolicy {
         videoFormatForWatchRequest: .h265,
         negotiatedCodec: .h265,
         fallbackMemory: state.fallbackMemory,
+        action: nil,
+        isFirstFrameWatchdogArmed: false,
         h264NegotiatedCodec: .h264Fallback
       )
     case .watchdogFired:
@@ -171,6 +203,8 @@ public enum CodecSelectionPolicy {
       videoFormatForWatchRequest: .h264,
       negotiatedCodec: .h264Fallback,
       fallbackMemory: .h264,
+      action: .reissueVideoWatchRequest(.h264),
+      isFirstFrameWatchdogArmed: false,
       h264NegotiatedCodec: .h264Fallback
     )
   }

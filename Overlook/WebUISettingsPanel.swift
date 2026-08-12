@@ -1,3 +1,4 @@
+// swiftlint:disable file_length line_length
 import SwiftUI
 import AppKit
 
@@ -1138,14 +1139,9 @@ struct WebUISettingsPanel: View {
     private func reconnectWebRTC() async {
         guard let device = kvmDeviceManager.connectedDevice else { return }
 
-        webRTCManager.disconnect()
-
-        do {
-            try await webRTCManager.connect(to: device)
-        } catch {
-            await MainActor.run {
-                recordError("Failed to reconnect WebRTC: \(error)")
-            }
+        await webRTCManager.reconnect(to: device)
+        if let reason = webRTCManager.lastDisconnectReason {
+            recordError("Failed to reconnect WebRTC: \(reason)")
         }
     }
 

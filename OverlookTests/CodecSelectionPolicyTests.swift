@@ -17,6 +17,8 @@ final class CodecSelectionPolicyTests: XCTestCase {
     let expectations: [MatrixExpectation]
   }
 
+  // The literal 96-case specification matrix is intentionally kept together for auditability.
+  // swiftlint:disable function_body_length
   func testCodecPreferenceConnectionKindOfferContentsAndWatchdogEventFullMatrix() throws {
     let fallback = MatrixExpectation(
       videoFormat: .h264, negotiatedCodec: .h264Fallback, fallbackMemory: .h264)
@@ -156,6 +158,7 @@ final class CodecSelectionPolicyTests: XCTestCase {
       }
     }
   }
+  // swiftlint:enable function_body_length
 
   func testCodecPreferenceAutoNegotiatesH265HappyPath() {
     var state = CodecSelectionPolicy.connect(
@@ -166,11 +169,14 @@ final class CodecSelectionPolicyTests: XCTestCase {
     XCTAssertEqual(state.videoFormatForWatchRequest, .h265)
 
     state = CodecSelectionPolicy.handleOffer(OfferContents(includesH265: true), state: state)
+    XCTAssertTrue(state.isFirstFrameWatchdogArmed)
     state = CodecSelectionPolicy.handleWatchdog(.firstDecodedFrameArrived, state: state)
 
     XCTAssertEqual(state.videoFormatForWatchRequest, .h265)
     XCTAssertEqual(state.negotiatedCodec, .h265)
     XCTAssertEqual(state.fallbackMemory, .none)
+    XCTAssertNil(state.action)
+    XCTAssertFalse(state.isFirstFrameWatchdogArmed)
   }
 
   func testFallbackWhenOfferLacksH265() {
@@ -185,6 +191,15 @@ final class CodecSelectionPolicyTests: XCTestCase {
     XCTAssertEqual(state.videoFormatForWatchRequest, .h264)
     XCTAssertEqual(state.negotiatedCodec, .h264Fallback)
     XCTAssertEqual(state.fallbackMemory, .h264)
+    XCTAssertEqual(state.action, .reissueVideoWatchRequest(.h264))
+    XCTAssertFalse(state.isFirstFrameWatchdogArmed)
+
+    let replacementOfferState = CodecSelectionPolicy.handleOffer(
+      OfferContents(includesH265: false), state: state)
+    XCTAssertNil(
+      replacementOfferState.action,
+      "the replacement offer must not trigger a re-watch loop"
+    )
   }
 
   func testFallbackWhenFirstFrameWatchdogFires() {
@@ -194,11 +209,17 @@ final class CodecSelectionPolicyTests: XCTestCase {
       fallbackMemory: .none
     )
     state = CodecSelectionPolicy.handleOffer(OfferContents(includesH265: true), state: state)
+    XCTAssertTrue(state.isFirstFrameWatchdogArmed)
     state = CodecSelectionPolicy.handleWatchdog(.watchdogFired, state: state)
 
     XCTAssertEqual(state.videoFormatForWatchRequest, .h264)
     XCTAssertEqual(state.negotiatedCodec, .h264Fallback)
     XCTAssertEqual(state.fallbackMemory, .h264)
+    XCTAssertEqual(state.action, .reissueVideoWatchRequest(.h264))
+    XCTAssertFalse(state.isFirstFrameWatchdogArmed)
+
+    state = CodecSelectionPolicy.handleWatchdog(.watchdogFired, state: state)
+    XCTAssertNil(state.action, "a fired watchdog transition must issue only one re-watch")
   }
 
   func testAutomaticReconnectHonorsFallbackMemory() {

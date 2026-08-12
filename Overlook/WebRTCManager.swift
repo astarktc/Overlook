@@ -107,8 +107,10 @@ class WebRTCManager: NSObject, ObservableObject {
     private var latencyMeasurementStart: Date?
 
     private var lastConnectedDevice: KVMDevice?
+    private var lastCodecPreference: CodecPreference = .auto
     private var codecSelectionState: CodecSelectionState?
     private var fallbackMemory: FallbackMemory = .none
+    private var suppressFrameArrivalSignalsForWatchdogTesting = false
 
     private let audioDevicesListenerQueue = DispatchQueue(label: "com.overlook.audio-device-change")
     private var audioDevicesListenerBlock: AudioObjectPropertyListenerBlock?
@@ -143,7 +145,18 @@ class WebRTCManager: NSObject, ObservableObject {
     private var streamHealthTimer: Timer?
 
     private let streamStallThresholdSeconds: CFTimeInterval = 3.0
+    // Five seconds matches the existing initial-frame health threshold: long enough for ICE and
+    // hardware decoder startup, while keeping a decode-starved black screen bounded.
     private let initialFrameTimeoutSeconds: CFTimeInterval = 5.0
+
+#if DEBUG
+    // Launch with OVERLOOK_FORCE_DECODE_STARVATION=1 to suppress the first-frame signals only
+    // while the policy has armed the H.265 watchdog. Fallback frames are observed normally.
+    private let forceDecodeStarvationForWatchdogTesting =
+        ProcessInfo.processInfo.environment["OVERLOOK_FORCE_DECODE_STARVATION"] == "1"
+#else
+    private let forceDecodeStarvationForWatchdogTesting = false
+#endif
     
     private let allowInsecureTLS = true
     private var signalingSession: URLSession?
@@ -188,6 +201,14 @@ class WebRTCManager: NSObject, ObservableObject {
     private func setLastVideoFrameTime(_ time: CFTimeInterval?) {
         streamHealthQueue.sync {
             lastVideoFrameTime = time
+        }
+    }
+
+    private func recordVideoFrame(at time: CFTimeInterval) -> Bool {
+        streamHealthQueue.sync {
+            let isFirstDecodedFrame = lastVideoFrameTime == nil
+            lastVideoFrameTime = time
+            return isFirstDecodedFrame
         }
     }
 
@@ -308,7 +329,7 @@ class WebRTCManager: NSObject, ObservableObject {
             defer { self.isAutoReconnectInProgress = false }
             await self.reconnect(
                 to: device,
-                codecPreference: .auto,
+                codecPreference: lastCodecPreference,
                 connectionKind: .automaticReconnect
             )
         }
@@ -338,6 +359,7 @@ class WebRTCManager: NSObject, ObservableObject {
         applyCodecSelectionState(initialCodecSelectionState)
 
         lastConnectedDevice = device
+        lastCodecPreference = codecPreference
         setupWebRTC()
 
         guard let factory = factory else {
@@ -455,6 +477,38 @@ class WebRTCManager: NSObject, ObservableObject {
         codecSelectionState = state
         fallbackMemory = state.fallbackMemory
         negotiatedCodec = state.negotiatedCodec
+        suppressFrameArrivalSignalsForWatchdogTesting =
+            forceDecodeStarvationForWatchdogTesting && state.isFirstFrameWatchdogArmed
+    }
+
+    /// Publishes a policy transition and executes its one-shot command, if any.
+    /// Returns true when the current offer/event was superseded by a new Watch Request.
+    private func applyAndActOnCodecSelectionState(_ state: CodecSelectionState) async -> Bool {
+        applyCodecSelectionState(state)
+
+        guard let action = state.action else { return false }
+        switch action {
+        case .reissueVideoWatchRequest(let videoFormat):
+            // Give the replacement stream its own initial-frame health window.
+            setLastVideoFrameTime(nil)
+            lastVideoFrameAgeSeconds = nil
+            connectedIceTime = CACurrentMediaTime()
+            isStreamStalled = false
+
+            do {
+                try await sendVideoWatchRequest(videoFormat: videoFormat)
+            } catch {
+                isConnecting = false
+                lastDisconnectReason = "Fallback Watch Request failed: \(String(describing: error))"
+            }
+            return true
+        }
+    }
+
+    private func handleFirstFrameWatchdogEvent(_ event: WatchdogEvent) async -> Bool {
+        guard let codecSelectionState else { return false }
+        let nextState = CodecSelectionPolicy.handleWatchdog(event, state: codecSelectionState)
+        return await applyAndActOnCodecSelectionState(nextState)
     }
 
     private func setupDataChannel() {
@@ -548,24 +602,7 @@ class WebRTCManager: NSObject, ObservableObject {
         janusHandleId = handleId
 
         // Video handle always requests video-only to avoid A/V sync causing video buffering.
-        let watchTransaction = makeJanusTransaction()
-        try await sendJanusMessage([
-            "janus": "message",
-            "body": [
-                "request": "watch",
-                "params": [
-                    "orientation": 0,
-                    "audio": false,
-                    "video": true,
-                    "mic": false,
-                    "camera": false,
-                    "video_format": videoFormat.rawValue,
-                ],
-            ],
-            "transaction": watchTransaction,
-            "session_id": sessionId,
-            "handle_id": handleId,
-        ])
+        try await sendVideoWatchRequest(videoFormat: videoFormat)
 
         if (audioEnabled || micEnabled), let audioPeerConnection {
             let audioAttachTransaction = makeJanusTransaction()
@@ -606,6 +643,31 @@ class WebRTCManager: NSObject, ObservableObject {
         }
 
         startJanusKeepAlive()
+    }
+
+    private func sendVideoWatchRequest(videoFormat: VideoFormat) async throws {
+        guard let sessionId = janusSessionId,
+              let handleId = janusHandleId else {
+            throw WebRTCError.signalingConnectionLost
+        }
+
+        try await sendJanusMessage([
+            "janus": "message",
+            "body": [
+                "request": "watch",
+                "params": [
+                    "orientation": 0,
+                    "audio": false,
+                    "video": true,
+                    "mic": false,
+                    "camera": false,
+                    "video_format": videoFormat.rawValue,
+                ],
+            ],
+            "transaction": makeJanusTransaction(),
+            "session_id": sessionId,
+            "handle_id": handleId,
+        ])
     }
 
     private func startJanusKeepAlive() {
@@ -810,7 +872,11 @@ class WebRTCManager: NSObject, ObservableObject {
                 SDPOfferParser.parse(sdpString),
                 state: codecSelectionState
             )
-            applyCodecSelectionState(nextState)
+            if await applyAndActOnCodecSelectionState(nextState) {
+                // A Fallback Watch Request supersedes this offer. Its replacement offer is the
+                // only one answered, which also makes the re-watch call flow terminate.
+                return
+            }
         }
         
         let sessionDescription = RTCSessionDescription(
@@ -906,6 +972,9 @@ class WebRTCManager: NSObject, ObservableObject {
                 if lastFrame == nil,
                    let connectedAt = self.connectedIceTime,
                    now - connectedAt > self.initialFrameTimeoutSeconds {
+                    if await self.handleFirstFrameWatchdogEvent(.watchdogFired) {
+                        return
+                    }
                     if self.isStreamStalled == false {
                         self.isStreamStalled = true
                         self.lastDisconnectReason = "Video stream stalled"
@@ -1301,6 +1370,7 @@ class WebRTCManager: NSObject, ObservableObject {
         videoSize = nil
         negotiatedCodec = nil
         codecSelectionState = nil
+        suppressFrameArrivalSignalsForWatchdogTesting = false
         isFrameCaptureEnabled = false
         inboundVideoKbps = nil
         inboundFps = nil
@@ -1518,10 +1588,15 @@ extension WebRTCManager: @preconcurrency RTCDataChannelDelegate {
 extension WebRTCManager: @preconcurrency RTCVideoRenderer {
     func renderFrame(_ frame: RTCVideoFrame?) {
         guard let frame else { return }
+        guard suppressFrameArrivalSignalsForWatchdogTesting == false else { return }
 
         let now = CACurrentMediaTime()
-
-        setLastVideoFrameTime(now)
+        let isFirstDecodedFrame = recordVideoFrame(at: now)
+        if isFirstDecodedFrame {
+            Task { @MainActor in
+                _ = await handleFirstFrameWatchdogEvent(.firstDecodedFrameArrived)
+            }
+        }
 
         if fpsWindowStartTime == 0 {
             fpsWindowStartTime = now
