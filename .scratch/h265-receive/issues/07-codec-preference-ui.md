@@ -4,13 +4,13 @@
 
 **Blocked by:** 06 — Fallback + watchdog (supplies the fallback-provenance state the display needs).
 
-**Status:** ready-for-human
+**Status:** done (live verification completed 2026-08-12)
 
-- [ ] Picker appears beside the existing stream settings with Auto / H.265 / H.264; default is Auto for a device with no stored preference — pending operator verification of visual placement; default behavior is unit-tested
+- [x] Picker appears beside the existing stream settings with Auto / H.265 / H.264; default is Auto — operator used the picker live 2026-08-12 (flipped H.264 and back; initial connect defaulted to Auto → H.265); default behavior unit-tested
 - [x] Preference persists per device across app restarts; a second device's preference is independent
 - [x] Changing the preference mid-connection reconnects with the new preference and clears fallback memory
-- [ ] Status bar shows "H.265" / "H.264" when natively negotiated and "H.264 (fallback)" after a Fallback; empty/absent when disconnected — pending operator verification of the rendered status surface
-- [ ] Explicit H.264 preference never sends an H.265 Watch Request (observable via Negotiated Codec and device behavior) — policy and manager propagation are code/test-proven; live-device observation remains pending operator verification
+- [x] Status bar shows "H.265" / "H.264" when natively negotiated — operator observed both labels live 2026-08-12 across the preference flips; "(fallback)" provenance rendering is covered by the published-state tests (no fallback occurred live — the pin prevents the mismatch that used to cause it)
+- [x] Explicit H.264 preference never sends an H.265 Watch Request — verified live 2026-08-12: preference flip pinned `video_format=0` and sent watch `video_format=0` (app log + device-side `set_params?video_format=0` POST), offer contained no H.265, native H.264 rendered
 - [x] App builds and all tests remain green (views themselves are untested, per the spec's testing decisions)
 
 ## Comments

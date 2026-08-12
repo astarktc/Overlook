@@ -105,7 +105,6 @@ static void H265DecompressionOutputCallback(
 
 - (NSInteger)startDecodeWithNumberOfCores:(int)numberOfCores {
     (void)numberOfCores;
-    NSLog(@"[DEBUG-h265] decoder startDecode called");
     return H265VideoCodecOK;
 }
 
@@ -117,13 +116,7 @@ static void H265DecompressionOutputCallback(
     (void)info;
     (void)renderTimeMs;
 
-    static int64_t decodeCallCount = 0;
-    decodeCallCount += 1;
-    if (decodeCallCount == 1 || decodeCallCount % 100 == 0) {
-        NSLog(@"[DEBUG-h265] decoder decode() call #%lld, bytes=%lu", decodeCallCount, (unsigned long)inputImage.buffer.length);
-    }
     if (inputImage.buffer.length == 0 || _callback == nil) {
-        NSLog(@"[DEBUG-h265] decode() rejected: emptyBuffer=%d nilCallback=%d", inputImage.buffer.length == 0, _callback == nil);
         return H265VideoCodecError;
     }
 
@@ -344,13 +337,7 @@ static void H265DecompressionOutputCallback(
     }
     [_outputLock unlock];
 
-    static int64_t outputFrameCount = 0;
     for (H265QueuedFrame *readyFrame in readyFrames) {
-        outputFrameCount += 1;
-        if (outputFrameCount == 1 || outputFrameCount % 100 == 0) {
-            NSLog(@"[DEBUG-h265] decoder output frame #%lld (%dx%d)", outputFrameCount,
-                  (int)readyFrame.frame.width, (int)readyFrame.frame.height);
-        }
         readyFrame.callback(readyFrame.frame);
     }
 }

@@ -2,7 +2,7 @@
 
 **What to build:** When Overlook connects (and on codec-preference change / fallback), set the device's actual encoder format through the authenticated kvmd API — `POST /api/streamer/set_params?video_format=N` via the existing `GLKVMClient.setStreamerParams` — so the encoder always matches the codec negotiated in the Janus watch/SDP.
 
-**Status:** ready-for-human (implemented; formal live-verify pass pending)
+**Status:** done (formal live-verify pass completed 2026-08-12)
 
 **Why (root cause of the live H.265 failure, proven 2026-08-12):** the Janus watch's
 `video_format` parameter shapes ONLY the SDP the GL plugin offers (`us_rtpv_make_sdp in
@@ -24,7 +24,7 @@ streamer on param changes, exactly like the existing quality/fps switching.
 - [x] Writer-conflict + disconnect policy DECIDED: **leave-as-set on disconnect** (no restore write; restoring would need prior-state tracking plus a racy write during teardown, and other GL clients self-heal by writing their own format). Documented at the ContentView wiring. **LAB-29 sync DONE (BDA, 2026-08-12): no conflict** — since the pin runs on every connect and the operator's normal codec is H.265, the device's standing state self-maintains at H.265, which is what his interim Safari usage wants; LAB-29's remaining scope shrank to device-side cleanup (override.yaml redundant block disposition)
 - [x] `-999 cancelled` interplay: one sequential awaited call per watch-triggering event (no rapid repetition introduced); the parked issue is about the settings-panel path and remains parked
 - [x] Unit test: `testStreamerParamsPinEncoderFormatToTheWatchRequestWireValues` (kvmd key + wire values); pin-before-watch ordering asserted live in the env-gated `testRealWebRTCManagerAgainstLocalJanusTunnel` (recorder pinner; verified against the real device 2026-08-12: pin → watch → first rendered frame, running as a second watcher beside the operator's live session)
-- [ ] Formal live-verify H.265 end-to-end with real set_params in the loop (tickets 04–08 checkboxes, BDA observing device-side)
+- [x] Formal live-verify H.265 end-to-end with real set_params in the loop — PASSED 2026-08-12 ~14:27 (this session did device-side observation directly; BDA notified). Evidence: (a) config key found DROPPED from `config.json` again pre-connect — live proof of volatility; (b) app log `encoder format pinned to video_format=1` → watch → offer `includesH265=1` → H265 decoder → first frame 2560x1440 in ~3 s, 8000+ frames at ~60fps, zero PLIs; (c) device log: `POST /streamer/set_params?video_format=1` from Overlook UA → 200, exactly one streamer start (idempotent — no redundant restart with value unchanged), encoder cmdline `--venc-format=1` with the config key still absent; (d) mismatch-heal proven via preference flips: pref→H.264 pinned 0 (kvmd restarted streamer to `--venc-format=0`, native H.264 rendered), pref→back pinned 1 with kvmd runtime at 0 — the exact GL-client-leftover state — and the pin flipped the encoder back before the watch; H.265 re-rendered in ~3 s
 - [x] Leave device codec state as found or report changes: verification used a recorder pinner only — no device state was touched
 
 ## Comments

@@ -46,9 +46,9 @@ final class H265LiveWireDiagnosticTests: XCTestCase {
     }
 
     /// Same preconditions, but drives the REAL WebRTCManager (full live
-    /// pipeline: codec policy, watch request, answer flow, watchdog, stats
-    /// probes). Verdict comes from the [DEBUG-h265] probe log lines the
-    /// instrumented manager already emits.
+    /// pipeline: codec policy, watch request, answer flow, watchdog).
+    /// Verdict comes from the [DIAG-h265-mgr] lines below plus the manager's
+    /// permanent "[Overlook] encoder format pinned" log.
     @MainActor
     func testRealWebRTCManagerAgainstLocalJanusTunnel() throws {
         guard ProcessInfo.processInfo.environment["OVERLOOK_H265_WIRE_DIAG"] == "1" else {
@@ -97,7 +97,7 @@ final class H265LiveWireDiagnosticTests: XCTestCase {
         connectTask.cancel()
         manager.disconnect()
         RunLoop.main.run(until: Date(timeIntervalSinceNow: 1))
-        NSLog("[DIAG-h265-mgr] test window complete — grep [DEBUG-h265] for verdict")
+        NSLog("[DIAG-h265-mgr] test window complete — grep [DIAG-h265] for verdict")
 
         XCTAssertEqual(
             recorder.formats.first, .h265,

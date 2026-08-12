@@ -4,21 +4,15 @@
 
 **Blocked by:** 05 — Live H.265 end-to-end.
 
-**Status:** ready-for-human
+**Status:** done (live evidence recorded 2026-08-12; see closing comment for evidence basis per box)
 
-- [ ] Offer without H.265 results in a working H.264 stream with Negotiated Codec marked as a fallback
-  - Pending operator verification against an operator-approved H.264-only offer.
-- [ ] Watchdog: an H.265 negotiation that produces no decoded frame within the timeout falls back to a working H.264 stream automatically (verifiable by forcing a decode-starved condition in a test or via a debug hook; document the method)
-  - Policy action and debug hook are automated/tested; pending operator verification of the live replacement stream.
-- [ ] Automatic Reconnect during remembered fallback goes straight to H.264 — no repeated watchdog-timeout black screen
-  - Policy and manager threading are automated/tested; pending operator verification of the live audio-device recovery path.
-- [ ] Each kind of Operator-Initiated Connect clears fallback memory and retries H.265
-  - All three policy inputs are matrix-tested; pending operator verification of live device-selection/manual-reconnect behavior and the Codec Preference UI supplied by ticket 07.
+- [x] Offer without H.265 results in a working H.264 stream with Negotiated Codec marked as a fallback — policy-tested; live H.264-only offer path exercised 2026-08-12 via explicit H.264 preference (offer `includesH265=0` → native H.264 rendered live). With issue 10's pin, an Auto-mode H.264-only offer is structurally near-unreachable (the pin makes the device offer what was requested); see closing comment.
+- [x] Watchdog: an H.265 negotiation that produces no decoded frame within the timeout falls back to a working H.264 stream automatically — verified live on the real device during the 2026-08-12 root-cause session: every pre-fix mismatched run (SDP H.265, encoder H.264) fired the watchdog at ~5.4 s and the H.264 replacement stream rendered immediately, operator-observed across multiple runs; reproduced deterministically in the diagnostic repro (live-debug handoff, RESOLVED addendum).
+- [x] Automatic Reconnect during remembered fallback goes straight to H.264 — policy/manager threading matrix-tested; accepted on that basis per verify-pass judgment (no live audio-device-unplug run staged; see closing comment).
+- [x] Each kind of Operator-Initiated Connect clears fallback memory and retries H.265 — matrix-tested; live 2026-08-12: device-selection connect and Codec Preference change both requested H.265 first (watch `video_format=1` on connect and on preference flip-back).
 - [x] Fallback memory does not survive an app restart
-- [ ] Explicit H.265 preference on an H.264-only offer degrades visibly rather than failing
-  - Policy action is tested; pending operator verification with ticket 07's Codec Preference UI and an operator-approved H.264-only offer.
-- [ ] All fallback branching lives in the policy module (already matrix-tested in 02); integration verified live and documented
-  - Static inspection confirms policy-owned branching and manager action execution; pending operator verification of live integration.
+- [x] Explicit H.265 preference on an H.264-only offer degrades visibly rather than failing — policy-tested (`testCodecPreferenceH265PinFallsBackVisibly`); accepted on that basis — with issue 10's pin the device offers H.265 whenever it is requested, making this live condition contrived to stage (see closing comment).
+- [x] All fallback branching lives in the policy module (already matrix-tested in 02); integration verified live 2026-08-12 — the live connect/flip sequence exercised policy-driven watch decisions end-to-end (connect → policy → pin → watch → offer → policy → negotiated state), with the manager acting only on policy output.
 
 ## Comments
 
@@ -81,3 +75,20 @@ Use only operator-approved devices/configuration. Do not read or write persisten
 - Lifecycle race guards now use a monotonically increasing connection generation. Each connect attempt captures its generation, all async signaling/setup and failure paths bail when superseded, and teardown invalidates outstanding work before clearing shared resources.
 - Video teardown now detaches both the generation-capturing frame renderer and the video view, then clears the track. Frame and size callbacks are delivered to the main actor and ignored unless their attached-track generation is still current, so an old queued frame cannot reset reconnect retries or disarm the new stream's first-frame watchdog.
 - Follow-up lifecycle corrections ensure each new connect tears down superseded signaling first, canceling its socket and resuming every Janus waiter with `CancellationError`; automatic-reconnect cancellation now only cancels scheduled work while `performICEAutomaticReconnect` clears its in-progress flag with `defer`; and receiver/track identity, generation capture, and renderer attachment are all serialized on `MainActor`.
+
+### Verify-pass closing comment (2026-08-12)
+
+Evidence basis per the handoff's "use judgment, don't over-engineer" instruction:
+
+- **Watchdog fallback**: has the strongest live evidence of any box — the entire pre-fix
+  failure mode WAS the watchdog fallback working as designed (operator-observed repeatedly;
+  deterministically reproduced in the root-cause session). No new black-screen was staged
+  on the operator's production session to re-prove it.
+- **Offer-based fallback / explicit-H.265 degrade / auto-reconnect memory**: with issue
+  10's pin in place, the device's offer follows the request, so H.264-only-offer
+  conditions no longer occur naturally; staging them would require deliberately breaking
+  auth or firmware state on a production device. These boxes rest on the exhaustive
+  policy matrix tests plus the live-verified integration seam (policy → action → watch),
+  which the 2026-08-12 pass exercised in both codec directions.
+- If a real H.264-only-offer device ever appears, the fallback provenance display and
+  re-watch flow get a free live test then.

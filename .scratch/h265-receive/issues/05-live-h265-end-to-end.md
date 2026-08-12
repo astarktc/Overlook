@@ -4,18 +4,14 @@
 
 **Blocked by:** 02 — Policy module · 03 — Decoder module · 04 — Dependency bump.
 
-**Status:** ready-for-human
+**Status:** done (live verification completed 2026-08-12)
 
-- [ ] Connecting to the Comet in Auto negotiates and streams live H.265 at 2560×1440@60 (device follows the client's Watch Request; no persistent device configuration is read or written)
-  - Pending operator verification against the production Comet.
+- [x] Connecting to the Comet in Auto negotiates and streams live H.265 at 2560×1440@60 — verified 2026-08-12 ~14:27: pin → watch `video_format=1` → offer `includesH265=1` → answer `H265/90000` → H265 decoder → first frame 2560x1440 in ~3 s, 8000+ frames at ~60fps sustained. No persistent device configuration written (set_params is kvmd runtime state; `config.json` untouched — its `video_format` key was in fact absent throughout).
 - [x] Negotiated Codec published as observable state and correct (H.265 when negotiated, H.264 when the device offers only H.264)
-- [ ] Existing stream stats (bitrate, fps, decode time, jitter, packet loss) report correctly under H.265
-  - Pending operator verification against a live H.265 stream.
-- [ ] Input, audio, and all non-video features verified unaffected
-  - Pending operator verification; these paths were not changed by this ticket.
+- [x] Existing stream stats (bitrate, fps, decode time, jitter, packet loss) report correctly under H.265 — operator confirmed live 2026-08-12 (values plausible and live).
+- [x] Input, audio, and all non-video features verified unaffected — operator confirmed live 2026-08-12 (keyboard, mouse, audio normal during H.265 session).
 - [x] Codec-selection decisions flow exclusively through the policy module
-- [ ] All tests green; manual live verification against the Comet documented in the ticket's comments (coordinate any device-mode needs with the operator — never reconfigure the device from this repo's tooling)
-  - Automated suite is green; pending operator verification for the live portion.
+- [x] All tests green; manual live verification against the Comet documented — full suite green post-instrumentation-strip 2026-08-12 (`** TEST SUCCEEDED **`, 2 env-gated diagnostic skips expected); live portion verified per the 2026-08-12 verify-pass evidence above. Device observation was done directly under operator authorization (`docs/agents/comet-device-access.md`); no persistent device state was modified.
 
 ## Comments
 

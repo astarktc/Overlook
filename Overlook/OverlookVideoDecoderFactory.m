@@ -34,7 +34,6 @@
 }
 
 - (id<RTCVideoDecoder>)createDecoder:(RTCVideoCodecInfo *)info {
-    NSLog(@"[DEBUG-h265] factory createDecoder: name=%@ params=%@", info.name, info.parameters);
     if ([info.name caseInsensitiveCompare:@"H265"] == NSOrderedSame) {
         NSString *profileID = info.parameters[@"profile-id"];
         if (profileID == nil || [profileID isEqualToString:@"1"]) {

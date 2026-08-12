@@ -2,6 +2,37 @@
 
 Date: 2026-08-12 · From: root-cause + issue-10 session · Repo: `/Users/alexstark/Projects/forks/Overlook` · Branch: `feature/h265-receive` · HEAD: `c91d4b9`, clean tree, nothing pushed.
 
+## ✅ VERIFY PASS COMPLETE (2026-08-12, ~14:27–14:45, verify-pass session)
+
+All steps below were executed and PASSED; the feature is closed out.
+
+- **Preflight found the smoking gun live**: the `video_format` key had been dropped from
+  `config.json` AGAIN since BDA's 12:29 restore — so the formal pass doubled as a
+  real-world pin test with the volatile-drop condition naturally present.
+- **Happy path**: pin → watch(1) → offer `includesH265=1` → H265 decoder → first frame
+  2560×1440 in ~3 s, 8000+ frames at ~60fps, zero PLIs. Device side: `set_params?video_format=1`
+  POST (Overlook UA) → 200, single streamer start (idempotence confirmed), encoder cmdline
+  `--venc-format=1` with the config key absent throughout.
+- **Mismatch-heal**: proven via Codec Preference flips instead of device writes (zero
+  device-side mutation, no kvmd restart, no token invalidation): pref→H.264 pinned 0 and
+  kvmd restarted the streamer to `--venc-format=0` (native H.264 rendered); pref→back
+  pinned 1 from kvmd runtime 0 — the exact GL-client-leftover state — and healed the
+  encoder before the watch. Both directions wire-verified.
+- **Operator verdicts**: stats plausible/live; input+audio normal; quality on par with the
+  GL web UI; latency feels normal. Tickets 04–08 + 10 all marked done (06/08 evidence
+  basis documented in their closing comments).
+- **Instrumentation stripped**: all `DEBUG-h265` probes removed (app + decoder + factory);
+  the permanent `[Overlook] encoder format pinned` log, env-gated
+  `H265LiveWireDiagnosticTests`, and `rtp_trace.py` kept as assets. Suite green post-strip
+  (`** TEST SUCCEEDED **`, 2 env-gated skips). Release rebuilt, reinstalled to
+  `/Applications/Overlook.app` per recipe (ATS + re-sign + verify), binary confirmed
+  probe-free with the pin log present.
+- **Device end state**: encoder at `--venc-format=1` (leave-as-set policy), config key
+  still absent (irrelevant — the pin governs), nothing else touched. BDA pinged at start
+  and close for LAB-28 mirroring.
+
+History below is the pre-pass plan; nothing further to do.
+
 ## State in one paragraph
 
 The live-H.265 mystery is SOLVED and the durable fix is implemented, tested, and

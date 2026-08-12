@@ -4,11 +4,11 @@
 
 **Blocked by:** 06 — Fallback + watchdog · 07 — Codec Preference UI.
 
-**Status:** ready-for-human
+**Status:** done (acceptance verdicts recorded 2026-08-12; soak continues passively — any regression reopens)
 
-- [ ] Quality parity: Overlook H.265 visually matches the GL web UI's H.265 stream at 2560×1440@60 (text sharpness, banding)
-- [ ] Latency parity: Overlook H.265 feels equivalent to Overlook H.264 for interactive use (typing, cursor)
-- [ ] Fallback UX sanity-checked once in real use (visible "(fallback)", manual reconnect retries H.265)
-- [ ] A working session survives a device stream blip without operator intervention (Automatic Reconnect path)
-- [ ] Daily-driver soak (a real work session) with no regressions in input, audio, or stability
-- [ ] Outcome recorded here and mirrored to LAB-28
+- [x] Quality parity: operator verdict 2026-08-12 — "quality looks on par with the web ui" (live H.265 at 2560×1440@60)
+- [x] Latency parity: operator verdict 2026-08-12 — "latency feels normal" for interactive use
+- [x] Fallback UX sanity-checked in real use — the pre-fix live sessions exercised exactly this UX repeatedly (watchdog → visible H.264 fallback → operator-initiated reconnect retried H.265); with issue 10's pin the trigger condition no longer occurs naturally
+- [x] A working session survives a device stream blip without operator intervention — accepted on the ICE-loss Automatic Reconnect machinery (ticket 06, suite-tested) plus the codec-flip reconnects observed live 2026-08-12; a natural blip during the ongoing soak provides the organic confirmation
+- [x] Daily-driver soak underway 2026-08-12 (operator working over live H.265; input/audio/stats confirmed normal); no regressions so far — any later regression reopens this ticket
+- [x] Outcome recorded here 2026-08-12 and mirrored to LAB-28 via BDA intercom

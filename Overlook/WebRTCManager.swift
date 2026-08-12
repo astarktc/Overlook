@@ -516,9 +516,6 @@ class WebRTCManager: NSObject, ObservableObject {
             connectionKind: connectionKind,
             fallbackMemory: fallbackMemory
         )
-        NSLog("[DEBUG-h265] connect gen=%d pref=%@ kind=%@ memory=%@ -> requesting videoFormat=%d",
-              generation, String(describing: codecPreference), String(describing: connectionKind),
-              String(describing: fallbackMemory), initialCodecSelectionState.videoFormatForWatchRequest.rawValue)
         applyCodecSelectionState(initialCodecSelectionState)
 
         lastConnectedDevice = device
@@ -660,7 +657,6 @@ class WebRTCManager: NSObject, ObservableObject {
         guard let action = state.action else { return false }
         switch action {
         case .reissueVideoWatchRequest(let videoFormat):
-            NSLog("[DEBUG-h265] FALLBACK re-watch with videoFormat=%d (gen=%d)", videoFormat.rawValue, generation)
             // Give the replacement stream its own initial-frame health window.
             setLastVideoFrameTime(nil)
             lastVideoFrameAgeSeconds = nil
@@ -865,7 +861,6 @@ class WebRTCManager: NSObject, ObservableObject {
         // will negotiate, BEFORE the device builds the offer/stream.
         await pinEncoderFormat(videoFormat)
 
-        NSLog("[DEBUG-h265] sending video Watch Request video_format=%d", videoFormat.rawValue)
         try await sendJanusMessage([
             "janus": "message",
             "body": [
@@ -1103,10 +1098,6 @@ class WebRTCManager: NSObject, ObservableObject {
                 offerContents,
                 state: codecSelectionState
             )
-            NSLog("[DEBUG-h265] offer received gen=%d includesH265=%d currentFormat=%d -> negotiated=%@ action=%@",
-                  generation, offerContents.includesH265 ? 1 : 0,
-                  codecSelectionState.videoFormatForWatchRequest.rawValue,
-                  String(describing: nextState.negotiatedCodec), String(describing: nextState.action))
             if await applyAndActOnCodecSelectionState(nextState, generation: generation) {
                 // A Fallback Watch Request supersedes this offer. Its replacement offer is the
                 // only one answered, which also makes the re-watch call flow terminate.
@@ -1148,12 +1139,6 @@ class WebRTCManager: NSObject, ObservableObject {
             )
             guard connectionGeneration == generation else { return }
             try await peerConnection.setLocalDescription(sessionDescription)
-            guard connectionGeneration == generation else { return }
-            let answerVideoLines = sessionDescription.sdp
-                .components(separatedBy: "\n")
-                .filter { $0.contains("m=video") || $0.lowercased().contains("h26") }
-                .joined(separator: " | ")
-            NSLog("[DEBUG-h265] answer video section: %@", answerVideoLines)
         } catch {
             guard connectionGeneration == generation else { return }
             print("Failed to create/send answer: \(error)")
@@ -1195,23 +1180,6 @@ class WebRTCManager: NSObject, ObservableObject {
         }
     }
 
-    private func logInboundVideoStatsWhileAwaitingFirstFrame() async {
-        guard let peerConnection else { return }
-        let report = await peerConnection.statistics()
-        for statistic in report.statistics.values where statistic.type == "inbound-rtp" {
-            guard (statistic.values["kind"] as? String) == "video" else { continue }
-            func stat(_ key: String) -> String {
-                guard let value = statistic.values[key] else { return "nil" }
-                return String(describing: value)
-            }
-            NSLog(
-                "[DEBUG-h265] inbound-rtp video: packetsReceived=%@ framesReceived=%@ framesDecoded=%@ keyFramesDecoded=%@ pliCount=%@ framesDropped=%@",
-                stat("packetsReceived"), stat("framesReceived"), stat("framesDecoded"),
-                stat("keyFramesDecoded"), stat("pliCount"), stat("framesDropped")
-            )
-        }
-    }
-
     private func startStreamHealthMonitoring() {
         streamHealthTimer?.invalidate()
         streamHealthTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
@@ -1242,15 +1210,10 @@ class WebRTCManager: NSObject, ObservableObject {
                     return
                 }
 
-                if lastFrame == nil, self.connectedIceTime != nil {
-                    await self.logInboundVideoStatsWhileAwaitingFirstFrame()
-                }
-
                 if lastFrame == nil,
                    let connectedAt = self.connectedIceTime,
                    now - connectedAt > self.initialFrameTimeoutSeconds {
                     let generation = self.connectionGeneration
-                    NSLog("[DEBUG-h265] first-frame WATCHDOG FIRED gen=%d elapsed=%.1fs", generation, now - connectedAt)
                     if await self.handleFirstFrameWatchdogEvent(
                         .watchdogFired,
                         generation: generation
@@ -1908,18 +1871,12 @@ extension WebRTCManager: @preconcurrency RTCDataChannelDelegate {
 // MARK: - RTCVideoRenderer
 extension WebRTCManager {
     fileprivate func renderFrame(_ frame: RTCVideoFrame?, generation: Int) {
-        guard connectionGeneration == generation else {
-            NSLog("[DEBUG-h265] renderFrame DROPPED stale generation frameGen=%d currentGen=%d", generation, connectionGeneration)
-            return
-        }
+        guard connectionGeneration == generation else { return }
         guard let frame else { return }
         guard suppressFrameArrivalSignalsForWatchdogTesting == false else { return }
 
         let now = CACurrentMediaTime()
         let isFirstDecodedFrame = recordVideoFrame(at: now)
-        if isFirstDecodedFrame {
-            NSLog("[DEBUG-h265] FIRST rendered frame gen=%d %dx%d", generation, frame.width, frame.height)
-        }
         if isFirstDecodedFrame {
             iceAutomaticReconnectAttempts = 0
             Task { @MainActor [weak self] in

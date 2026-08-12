@@ -4,11 +4,11 @@
 
 **Blocked by:** 03 — H.265 decoder module (its tests are this ticket's safety net).
 
-**Status:** ready-for-human
+**Status:** done (live verification completed 2026-08-12)
 
 - [x] Dependency pinned to the chosen ≥150 release; app and test targets build clean
 - [x] All existing tests (decoder fixtures, policy matrix if present) still green on the new binary
-- [ ] H.264 live streaming to the Comet verified working end-to-end (connect, video, input, audio, stats)
+- [x] H.264 live streaming to the Comet verified working end-to-end (connect, video, input, audio, stats) — 2026-08-12 verify pass: explicit H.264 preference streamed native H.264 live (`createDecoder: name=H264`, first frame 2560x1440 in 2.8 s, operator confirmed "works as normal"); H.265 sessions on the same 151.0.0 binary sustained ~60fps
 - [x] The reflection-based playout-delay-hint invocation re-verified against the new binary: confirm the selector still resolves and the hint still takes effect (it fails soft by design — silent loss would be an unnoticed latency regression)
 - [x] The post-build codesign recipe (re-sign embedded WebRTC framework, then the app) confirmed still working with the new framework
 - [x] Any API-drift adaptations documented in the ticket's comments for future bump reference
