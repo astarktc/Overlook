@@ -43,6 +43,28 @@ struct InputEvent: Codable {
 }
 
 #if canImport(WebRTC)
+private final class ConnectionGenerationVideoRenderer: NSObject, RTCVideoRenderer {
+    private weak var manager: WebRTCManager?
+    private let generation: Int
+
+    init(manager: WebRTCManager, generation: Int) {
+        self.manager = manager
+        self.generation = generation
+    }
+
+    func renderFrame(_ frame: RTCVideoFrame?) {
+        Task { @MainActor [weak manager] in
+            manager?.renderFrame(frame, generation: generation)
+        }
+    }
+
+    func setSize(_ size: CGSize) {
+        Task { @MainActor [weak manager] in
+            manager?.setVideoSize(size, generation: generation)
+        }
+    }
+}
+
 @MainActor
 class WebRTCManager: NSObject, ObservableObject {
     private final class SessionDelegate: NSObject, URLSessionDelegate {
@@ -98,6 +120,8 @@ class WebRTCManager: NSObject, ObservableObject {
     private var peerConnection: RTCPeerConnection?
     private var audioPeerConnection: RTCPeerConnection?
     private var videoTrack: RTCVideoTrack?
+    private var videoRenderer: ConnectionGenerationVideoRenderer?
+    private var connectionGeneration = 0
     private var localAudioTrack: RTCAudioTrack?
     private var localAudioSender: RTCRtpSender?
     private var dataChannel: RTCDataChannel?
@@ -372,6 +396,7 @@ class WebRTCManager: NSObject, ObservableObject {
         audioDeviceChangeDebounceTask = nil
         iceAutomaticReconnectAttempts = 0
         lastAutoReconnectAt = nil
+        isAutoReconnectInProgress = false
         lastConnectedDevice = device
         shouldMaintainConnection = true
     }
@@ -424,13 +449,13 @@ class WebRTCManager: NSObject, ObservableObject {
             codecPreference: codecPreferenceStore.preference(forDeviceID: device.id),
             connectionKind: .automaticReconnect
         )
+        guard iceAutomaticReconnectGeneration == generation else { return }
         isAutoReconnectInProgress = false
 
         if shouldMaintainConnection == false {
             tearDownConnection()
             return
         }
-        guard iceAutomaticReconnectGeneration == generation else { return }
         iceAutomaticReconnectTask = nil
         guard shouldMaintainConnection, lastConnectedDevice?.id == device.id else { return }
         if didStart == false {
@@ -455,7 +480,7 @@ class WebRTCManager: NSObject, ObservableObject {
 
     func connect(to device: KVMDevice) async throws {
         beginOperatorInitiatedConnect(to: device)
-        try await connect(
+        _ = try await connect(
             to: device,
             codecPreference: codecPreferenceStore.preference(forDeviceID: device.id),
             connectionKind: .operatorInitiatedConnect(.deviceSelection)
@@ -466,7 +491,10 @@ class WebRTCManager: NSObject, ObservableObject {
         to device: KVMDevice,
         codecPreference: CodecPreference,
         connectionKind: ConnectionKind
-    ) async throws {
+    ) async throws -> Bool {
+        connectionGeneration &+= 1
+        let generation = connectionGeneration
+
         let initialCodecSelectionState = CodecSelectionPolicy.connect(
             codecPreference: codecPreference,
             connectionKind: connectionKind,
@@ -526,6 +554,7 @@ class WebRTCManager: NSObject, ObservableObject {
 
             if micEnabled {
                 let granted = await ensureMicrophoneAccess()
+                guard connectionGeneration == generation else { return false }
                 if granted {
                     setupLocalMicrophoneTrackIfNeeded(factory: factory, peerConnection: audioPeerConnection ?? peerConnection)
                 }
@@ -537,13 +566,17 @@ class WebRTCManager: NSObject, ObservableObject {
             // Connect to signaling server
             try await connectToSignalingServer(
                 device: device,
-                videoFormat: initialCodecSelectionState.videoFormatForWatchRequest
+                videoFormat: initialCodecSelectionState.videoFormatForWatchRequest,
+                generation: generation
             )
+            guard connectionGeneration == generation else { return false }
             
             // Start connection quality monitoring
             startLatencyMonitoring()
             startStreamHealthMonitoring()
+            return true
         } catch {
+            guard connectionGeneration == generation else { return false }
             let reason = "Connect failed: \(String(describing: error))"
             tearDownConnection()
             lastDisconnectReason = reason
@@ -569,12 +602,11 @@ class WebRTCManager: NSObject, ObservableObject {
         guard shouldMaintainConnection else { return false }
         tearDownConnection()
         do {
-            try await connect(
+            return try await connect(
                 to: device,
                 codecPreference: codecPreference,
                 connectionKind: connectionKind
             )
-            return true
         } catch {
             isConnecting = false
             lastDisconnectReason = "Reconnect failed: \(String(describing: error))"
@@ -600,7 +632,11 @@ class WebRTCManager: NSObject, ObservableObject {
 
     /// Publishes a policy transition and executes its one-shot command, if any.
     /// Returns true when the current offer/event was superseded by a new Watch Request.
-    private func applyAndActOnCodecSelectionState(_ state: CodecSelectionState) async -> Bool {
+    private func applyAndActOnCodecSelectionState(
+        _ state: CodecSelectionState,
+        generation: Int
+    ) async -> Bool {
+        guard connectionGeneration == generation else { return true }
         applyCodecSelectionState(state)
 
         guard let action = state.action else { return false }
@@ -614,7 +650,9 @@ class WebRTCManager: NSObject, ObservableObject {
 
             do {
                 try await sendVideoWatchRequest(videoFormat: videoFormat)
+                guard connectionGeneration == generation else { return true }
             } catch {
+                guard connectionGeneration == generation else { return true }
                 isConnecting = false
                 lastDisconnectReason = "Fallback Watch Request failed: \(String(describing: error))"
             }
@@ -622,10 +660,14 @@ class WebRTCManager: NSObject, ObservableObject {
         }
     }
 
-    private func handleFirstFrameWatchdogEvent(_ event: WatchdogEvent) async -> Bool {
+    private func handleFirstFrameWatchdogEvent(
+        _ event: WatchdogEvent,
+        generation: Int
+    ) async -> Bool {
+        guard connectionGeneration == generation else { return true }
         guard let codecSelectionState else { return false }
         let nextState = CodecSelectionPolicy.handleWatchdog(event, state: codecSelectionState)
-        return await applyAndActOnCodecSelectionState(nextState)
+        return await applyAndActOnCodecSelectionState(nextState, generation: generation)
     }
 
     private func setupDataChannel() {
@@ -660,8 +702,10 @@ class WebRTCManager: NSObject, ObservableObject {
     
     private func connectToSignalingServer(
         device: KVMDevice,
-        videoFormat: VideoFormat
+        videoFormat: VideoFormat,
+        generation: Int
     ) async throws {
+        guard connectionGeneration == generation else { return }
         guard let rawURL = URL(string: device.webRTCURL) else {
             throw WebRTCError.invalidSignalingURL
         }
@@ -680,12 +724,12 @@ class WebRTCManager: NSObject, ObservableObject {
         request.setValue(device.originURL, forHTTPHeaderField: "Origin")
         request.setValue("janus-protocol", forHTTPHeaderField: "Sec-WebSocket-Protocol")
 
-        webSocketTask = session.webSocketTask(with: request)
-        
-        webSocketTask?.resume()
+        let socketTask = session.webSocketTask(with: request)
+        webSocketTask = socketTask
+        socketTask.resume()
 
         Task {
-            await listenForSignalingMessages()
+            await listenForSignalingMessages(on: socketTask, generation: generation)
         }
 
         // Janus session setup
@@ -694,8 +738,10 @@ class WebRTCManager: NSObject, ObservableObject {
             "janus": "create",
             "transaction": createTransaction,
         ])
+        guard connectionGeneration == generation else { return }
 
         let createResponse = try await waitForJanusTransaction(createTransaction)
+        guard connectionGeneration == generation else { return }
         guard let data = createResponse["data"] as? [String: Any],
               let sessionId = data["id"] as? Int else {
             throw WebRTCError.signalingConnectionLost
@@ -710,8 +756,10 @@ class WebRTCManager: NSObject, ObservableObject {
             "transaction": attachTransaction,
             "session_id": sessionId,
         ])
+        guard connectionGeneration == generation else { return }
 
         let attachResponse = try await waitForJanusTransaction(attachTransaction)
+        guard connectionGeneration == generation else { return }
         guard let attachData = attachResponse["data"] as? [String: Any],
               let handleId = attachData["id"] as? Int else {
             throw WebRTCError.signalingConnectionLost
@@ -720,6 +768,7 @@ class WebRTCManager: NSObject, ObservableObject {
 
         // Video handle always requests video-only to avoid A/V sync causing video buffering.
         try await sendVideoWatchRequest(videoFormat: videoFormat)
+        guard connectionGeneration == generation else { return }
 
         if (audioEnabled || micEnabled), let audioPeerConnection {
             let audioAttachTransaction = makeJanusTransaction()
@@ -730,8 +779,10 @@ class WebRTCManager: NSObject, ObservableObject {
                 "transaction": audioAttachTransaction,
                 "session_id": sessionId,
             ])
+            guard connectionGeneration == generation else { return }
 
             let audioAttachResponse = try await waitForJanusTransaction(audioAttachTransaction)
+            guard connectionGeneration == generation else { return }
             guard let audioAttachData = audioAttachResponse["data"] as? [String: Any],
                   let audioHandleId = audioAttachData["id"] as? Int else {
                 throw WebRTCError.signalingConnectionLost
@@ -755,6 +806,7 @@ class WebRTCManager: NSObject, ObservableObject {
                 "session_id": sessionId,
                 "handle_id": audioHandleId,
             ])
+            guard connectionGeneration == generation else { return }
 
             _ = audioPeerConnection
         }
@@ -877,12 +929,17 @@ class WebRTCManager: NSObject, ObservableObject {
         return comps.url ?? url
     }
     
-    private func listenForSignalingMessages() async {
-        while let webSocketTask = webSocketTask {
+    private func listenForSignalingMessages(
+        on socketTask: URLSessionWebSocketTask,
+        generation: Int
+    ) async {
+        while connectionGeneration == generation, webSocketTask === socketTask {
             do {
-                let message = try await webSocketTask.receive()
-                await handleSignalingMessage(message)
+                let message = try await socketTask.receive()
+                guard connectionGeneration == generation, webSocketTask === socketTask else { return }
+                await handleSignalingMessage(message, generation: generation)
             } catch {
+                guard connectionGeneration == generation, webSocketTask === socketTask else { return }
                 print("WebSocket receive error: \(error)")
                 isConnecting = false
                 if isConnected || hasEverConnectedToStream || lastDisconnectReason == nil {
@@ -893,7 +950,11 @@ class WebRTCManager: NSObject, ObservableObject {
         }
     }
     
-    private func handleSignalingMessage(_ message: URLSessionWebSocketTask.Message) async {
+    private func handleSignalingMessage(
+        _ message: URLSessionWebSocketTask.Message,
+        generation: Int
+    ) async {
+        guard connectionGeneration == generation else { return }
         switch message {
         case .string(let string):
             guard let data = string.data(using: .utf8),
@@ -901,21 +962,22 @@ class WebRTCManager: NSObject, ObservableObject {
                 return
             }
 
-            await handleJanusMessage(signalingMessage)
+            await handleJanusMessage(signalingMessage, generation: generation)
             
         case .data(let data):
             guard let signalingMessage = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                 return
             }
 
-            await handleJanusMessage(signalingMessage)
+            await handleJanusMessage(signalingMessage, generation: generation)
             
         @unknown default:
             break
         }
     }
 
-    private func handleJanusMessage(_ message: [String: Any]) async {
+    private func handleJanusMessage(_ message: [String: Any], generation: Int) async {
+        guard connectionGeneration == generation else { return }
         if let transaction = message["transaction"] as? String,
            let waiter = janusWaiters.removeValue(forKey: transaction) {
             waiter.resume(returning: message)
@@ -966,10 +1028,15 @@ class WebRTCManager: NSObject, ObservableObject {
             return
         }
 
-        await handleOfferSDP(sdpString, senderHandleId: senderHandleId)
+        await handleOfferSDP(sdpString, senderHandleId: senderHandleId, generation: generation)
     }
     
-    private func handleOfferSDP(_ sdpString: String, senderHandleId: Int?) async {
+    private func handleOfferSDP(
+        _ sdpString: String,
+        senderHandleId: Int?,
+        generation: Int
+    ) async {
+        guard connectionGeneration == generation else { return }
         guard let videoHandleId = janusHandleId else { return }
 
         let peerConnection: RTCPeerConnection?
@@ -989,11 +1056,12 @@ class WebRTCManager: NSObject, ObservableObject {
                 SDPOfferParser.parse(sdpString),
                 state: codecSelectionState
             )
-            if await applyAndActOnCodecSelectionState(nextState) {
+            if await applyAndActOnCodecSelectionState(nextState, generation: generation) {
                 // A Fallback Watch Request supersedes this offer. Its replacement offer is the
                 // only one answered, which also makes the re-watch call flow terminate.
                 return
             }
+            guard connectionGeneration == generation else { return }
         }
         
         let sessionDescription = RTCSessionDescription(
@@ -1003,22 +1071,35 @@ class WebRTCManager: NSObject, ObservableObject {
         
         do {
             try await peerConnection.setRemoteDescription(sessionDescription)
+            guard connectionGeneration == generation else { return }
         } catch {
+            guard connectionGeneration == generation else { return }
             print("Failed to set remote description: \(error)")
         }
         
         // Create and send answer
-        await createAndSendAnswer(peerConnection: peerConnection, handleId: handleId)
+        await createAndSendAnswer(
+            peerConnection: peerConnection,
+            handleId: handleId,
+            generation: generation
+        )
     }
 
-    private func createAndSendAnswer(peerConnection: RTCPeerConnection, handleId: Int) async {
+    private func createAndSendAnswer(
+        peerConnection: RTCPeerConnection,
+        handleId: Int,
+        generation: Int
+    ) async {
 
         do {
             let sessionDescription = try await peerConnection.answer(
                 for: RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil)
             )
+            guard connectionGeneration == generation else { return }
             try await peerConnection.setLocalDescription(sessionDescription)
+            guard connectionGeneration == generation else { return }
         } catch {
+            guard connectionGeneration == generation else { return }
             print("Failed to create/send answer: \(error)")
             return
         }
@@ -1042,7 +1123,9 @@ class WebRTCManager: NSObject, ObservableObject {
                     "sdp": localDescription.sdp,
                 ],
             ])
+            guard connectionGeneration == generation else { return }
         } catch {
+            guard connectionGeneration == generation else { return }
             print("Failed to send Janus answer: \(error)")
         }
     }
@@ -1089,9 +1172,14 @@ class WebRTCManager: NSObject, ObservableObject {
                 if lastFrame == nil,
                    let connectedAt = self.connectedIceTime,
                    now - connectedAt > self.initialFrameTimeoutSeconds {
-                    if await self.handleFirstFrameWatchdogEvent(.watchdogFired) {
+                    let generation = self.connectionGeneration
+                    if await self.handleFirstFrameWatchdogEvent(
+                        .watchdogFired,
+                        generation: generation
+                    ) {
                         return
                     }
+                    guard self.connectionGeneration == generation else { return }
                     if self.isStreamStalled == false {
                         self.isStreamStalled = true
                         self.lastDisconnectReason = "Video stream stalled"
@@ -1453,6 +1541,8 @@ class WebRTCManager: NSObject, ObservableObject {
     }
 
     private func tearDownConnection() {
+        connectionGeneration &+= 1
+
         connectionTimer?.invalidate()
         connectionTimer = nil
 
@@ -1475,6 +1565,15 @@ class WebRTCManager: NSObject, ObservableObject {
         
         dataChannel?.close()
         dataChannel = nil
+
+        if let videoTrack, let videoRenderer {
+            videoTrack.remove(videoRenderer)
+        }
+        if let videoTrack, let videoView {
+            videoTrack.remove(videoView)
+        }
+        videoRenderer = nil
+        videoTrack = nil
         
         peerConnection?.close()
         peerConnection = nil
@@ -1673,13 +1772,20 @@ extension WebRTCManager: @preconcurrency RTCPeerConnectionDelegate {
     }
 
     func peerConnection(_ peerConnection: RTCPeerConnection, didAdd rtpReceiver: RTCRtpReceiver, streams: [RTCMediaStream]) {
+        guard peerConnection === self.peerConnection else { return }
         applyPlayoutDelayHintIfPossible()
         guard let track = rtpReceiver.track as? RTCVideoTrack else { return }
+
+        let renderer = ConnectionGenerationVideoRenderer(
+            manager: self,
+            generation: connectionGeneration
+        )
         videoTrack = track
+        videoRenderer = renderer
         if let videoView {
             track.add(videoView)
         }
-        track.add(self)
+        track.add(renderer)
     }
 }
 
@@ -1719,17 +1825,22 @@ extension WebRTCManager: @preconcurrency RTCDataChannelDelegate {
  }
 
 // MARK: - RTCVideoRenderer
-extension WebRTCManager: @preconcurrency RTCVideoRenderer {
-    func renderFrame(_ frame: RTCVideoFrame?) {
+extension WebRTCManager {
+    fileprivate func renderFrame(_ frame: RTCVideoFrame?, generation: Int) {
+        guard connectionGeneration == generation else { return }
         guard let frame else { return }
         guard suppressFrameArrivalSignalsForWatchdogTesting == false else { return }
 
         let now = CACurrentMediaTime()
         let isFirstDecodedFrame = recordVideoFrame(at: now)
         if isFirstDecodedFrame {
-            Task { @MainActor in
-                iceAutomaticReconnectAttempts = 0
-                _ = await handleFirstFrameWatchdogEvent(.firstDecodedFrameArrived)
+            iceAutomaticReconnectAttempts = 0
+            Task { @MainActor [weak self] in
+                guard let self, self.connectionGeneration == generation else { return }
+                _ = await self.handleFirstFrameWatchdogEvent(
+                    .firstDecodedFrameArrived,
+                    generation: generation
+                )
             }
         }
 
@@ -1744,9 +1855,7 @@ extension WebRTCManager: @preconcurrency RTCVideoRenderer {
             let dt = now - fpsWindowStartTime
             if dt > 0 {
                 let fps = Double(fpsFrameCount) / dt
-                Task { @MainActor in
-                    inboundFps = fps
-                }
+                inboundFps = fps
             }
             fpsWindowStartTime = now
             fpsFrameCount = 0
@@ -1762,18 +1871,14 @@ extension WebRTCManager: @preconcurrency RTCVideoRenderer {
         lastFrameCaptureTime = now
 
         if let cvBuffer = frame.buffer as? RTCCVPixelBuffer {
-            let pb = cvBuffer.pixelBuffer
-            Task { @MainActor in
-                currentFrame = pb
-            }
+            currentFrame = cvBuffer.pixelBuffer
         }
     }
     
-    func setSize(_ size: CGSize) {
-        Task { @MainActor in
-            if size.width > 0, size.height > 0 {
-                videoSize = size
-            }
+    fileprivate func setVideoSize(_ size: CGSize, generation: Int) {
+        guard connectionGeneration == generation else { return }
+        if size.width > 0, size.height > 0 {
+            videoSize = size
         }
     }
 }
