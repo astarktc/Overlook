@@ -16,5 +16,6 @@ Verified NAL structure (both files): `[VPS(32) SPS(33) PPS(34) IDR_W_RADL(19)
 TRAIL_R(1) ×59]` repeating each 1s GOP — parameter sets in-band before **every**
 IDR (14/14 across both captures, zero exceptions). No CRA, no SEI.
 
-Hashes verified against the on-device originals at copy time. This directory is
-an untracked drop zone — move/commit these wherever your test layout wants them.
+Hashes were verified against the on-device originals at copy time and again before
+promotion from the incoming drop zone. These files are committed test resources for
+the `OverlookTests` target.

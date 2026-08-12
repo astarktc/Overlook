@@ -29,6 +29,10 @@
 		0100001D /* CoreAudioDevices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200001C /* CoreAudioDevices.swift */; };
 		0100001E /* WebRTCAudioDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200001D /* WebRTCAudioDevice.swift */; };
 		0100001F /* WebRTCFactoryBuilder.m in Sources */ = {isa = PBXBuildFile; fileRef = 02000021 /* WebRTCFactoryBuilder.m */; };
+		01000020 /* OverlookTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000022 /* OverlookTests.swift */; };
+		01000021 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 02000023 /* README.md */; };
+		01000022 /* lab28-h265-sample.bin in Resources */ = {isa = PBXBuildFile; fileRef = 02000024 /* lab28-h265-sample.bin */; };
+		01000023 /* lab28-h265-rejoin.bin in Resources */ = {isa = PBXBuildFile; fileRef = 02000025 /* lab28-h265-rejoin.bin */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -57,7 +61,12 @@
 		0200001F /* Overlook-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Overlook-Bridging-Header.h"; sourceTree = "<group>"; };
 		02000020 /* WebRTCFactoryBuilder.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = WebRTCFactoryBuilder.h; sourceTree = "<group>"; };
 		02000021 /* WebRTCFactoryBuilder.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = WebRTCFactoryBuilder.m; sourceTree = "<group>"; };
+		02000022 /* OverlookTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlookTests.swift; sourceTree = "<group>"; };
+		02000023 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		02000024 /* lab28-h265-sample.bin */ = {isa = PBXFileReference; lastKnownFileType = file; path = "lab28-h265-sample.bin"; sourceTree = "<group>"; };
+		02000025 /* lab28-h265-rejoin.bin */ = {isa = PBXFileReference; lastKnownFileType = file; path = "lab28-h265-rejoin.bin"; sourceTree = "<group>"; };
 		03000001 /* Overlook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Overlook.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		03000002 /* OverlookTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OverlookTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -69,6 +78,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		04000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -76,6 +92,7 @@
 			isa = PBXGroup;
 			children = (
 				05000002 /* Overlook */,
+				05000004 /* OverlookTests */,
 				05000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -116,8 +133,28 @@
 			isa = PBXGroup;
 			children = (
 				03000001 /* Overlook.app */,
+				03000002 /* OverlookTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		05000004 /* OverlookTests */ = {
+			isa = PBXGroup;
+			children = (
+				02000022 /* OverlookTests.swift */,
+				05000005 /* Fixtures */,
+			);
+			path = OverlookTests;
+			sourceTree = "<group>";
+		};
+		05000005 /* Fixtures */ = {
+			isa = PBXGroup;
+			children = (
+				02000023 /* README.md */,
+				02000024 /* lab28-h265-sample.bin */,
+				02000025 /* lab28-h265-rejoin.bin */,
+			);
+			path = Fixtures;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -143,6 +180,25 @@
 			productReference = 03000001 /* Overlook.app */;
 			productType = "com.apple.product-type.application";
 		};
+		06000002 /* OverlookTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 07000002 /* Build configuration list for PBXNativeTarget "OverlookTests" */;
+			buildPhases = (
+				08000002 /* Sources */,
+				04000002 /* Frameworks */,
+				09000002 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = OverlookTests;
+			packageProductDependencies = (
+			);
+			productName = OverlookTests;
+			productReference = 03000002 /* OverlookTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -156,6 +212,9 @@
 				TargetAttributes = {
 					06000001 = {
 						CreatedOnToolsVersion = 15.0;
+					};
+					06000002 = {
+						CreatedOnToolsVersion = 26.6;
 					};
 				};
 			};
@@ -176,6 +235,7 @@
 			projectRoot = "";
 			targets = (
 				06000001 /* Overlook */,
+				06000002 /* OverlookTests */,
 			);
 		};
 /* End PBXProject section */
@@ -186,6 +246,16 @@
 			buildActionMask = 2147483647;
 			files = (
 				01000003 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		09000002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				01000021 /* README.md in Resources */,
+				01000022 /* lab28-h265-sample.bin in Resources */,
+				01000023 /* lab28-h265-rejoin.bin in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -216,6 +286,14 @@
 				01000010 /* MenuBarAgent.swift in Sources */,
 				01000014 /* TailscaleManager.swift in Sources */,
 				01000011 /* JSONValue.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		08000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				01000020 /* OverlookTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -414,6 +492,38 @@
 			};
 			name = Release;
 		};
+		12000005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.overlook.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		12000006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.overlook.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -422,6 +532,15 @@
 			buildConfigurations = (
 				12000003 /* Debug */,
 				12000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		07000002 /* Build configuration list for PBXNativeTarget "OverlookTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				12000005 /* Debug */,
+				12000006 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
