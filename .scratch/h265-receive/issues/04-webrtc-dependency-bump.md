@@ -4,7 +4,7 @@
 
 **Blocked by:** 03 — H.265 decoder module (its tests are this ticket's safety net).
 
-**Status:** done pending live verification
+**Status:** ready-for-human
 
 - [x] Dependency pinned to the chosen ≥150 release; app and test targets build clean
 - [x] All existing tests (decoder fixtures, policy matrix if present) still green on the new binary

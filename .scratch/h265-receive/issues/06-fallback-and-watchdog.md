@@ -39,9 +39,10 @@
 | `VideoSurfaceView` reconnect callbacks → `WebRTCManager.reconnect` | Operator presses reconnect | Operator-Initiated Connect (`manualReconnect`) |
 | `WebUISettingsPanel.reconnectWebRTC` → `WebRTCManager.reconnect` | Operator presses “Reconnect WebRTC” | Operator-Initiated Connect (`manualReconnect`) |
 | Audio-device disappearance debounce → private `reconnect` | Device blip without operator action | Automatic Reconnect; retained Codec Preference and session Fallback memory are threaded through |
+| Video ICE `.failed`, or `.disconnected` beyond its grace period | Stream drop without operator action | Automatic Reconnect; retained Codec Preference and session Fallback memory are threaded through |
 | Codec Preference change (ticket 07 caller) | Operator changes Codec Preference | Policy input is `operatorInitiatedConnect(.codecPreferenceChange)`; matrix-tested, live caller pending ticket 07 |
 
-No other WebRTC automatic retry/reconnect call sites exist in the manager. Signaling/ICE failures currently surface connection loss for an operator action; they do not initiate an automatic retry.
+These are the manager's Automatic Reconnect call sites. A signaling-only failure still surfaces connection loss without initiating a separate retry.
 
 ### Automated verification
 
@@ -75,3 +76,5 @@ Use only operator-approved devices/configuration. Do not read or write persisten
    2. Repeat by disconnecting and selecting the device again; confirm the same H.265-first behavior.
    3. After ticket 07 lands, change Codec Preference to Auto or H.265 and reconnect through that control; confirm H.265 is requested first and the remembered Fallback was cleared.
    4. Quit and relaunch normally (without the hook), connect again, and confirm the first Watch Request is H.265, proving Fallback memory did not survive app restart.
+
+- Added ICE-loss Automatic Reconnect recovery. Video ICE `.failed` schedules recovery with 0.5/1/2-second backoff; `.disconnected` receives a 2-second grace period and is canceled if ICE recovers. Recovery is limited to three attempts, requires the explicit `shouldMaintainConnection` operator-intent flag and current device target, resets after the first decoded frame or any Operator-Initiated Connect, and is canceled by operator disconnect, app termination, or deinitialization. Each retry remains classified as Automatic Reconnect, so remembered Fallback continues through `CodecSelectionPolicy.connect` and the replacement H.264 offer publishes `H.264 (fallback)`. Live ICE-loss verification remains outstanding.

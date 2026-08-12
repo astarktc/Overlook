@@ -58,6 +58,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        webRTCManager.disconnect()
         menuBarAgent?.cleanup()
         return .terminateNow
     }

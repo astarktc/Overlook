@@ -201,7 +201,7 @@ public enum CodecSelectionPolicy {
   private static func fallbackState() -> CodecSelectionState {
     CodecSelectionState(
       videoFormatForWatchRequest: .h264,
-      negotiatedCodec: .h264Fallback,
+      negotiatedCodec: nil,
       fallbackMemory: .h264,
       action: .reissueVideoWatchRequest(.h264),
       isFirstFrameWatchdogArmed: false,

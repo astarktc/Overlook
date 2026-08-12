@@ -4,7 +4,7 @@ import XCTest
 final class CodecSelectionPolicyTests: XCTestCase {
   private struct MatrixExpectation {
     let videoFormat: VideoFormat
-    let negotiatedCodec: NegotiatedCodec
+    let negotiatedCodec: NegotiatedCodec?
     let fallbackMemory: FallbackMemory
   }
 
@@ -21,6 +21,10 @@ final class CodecSelectionPolicyTests: XCTestCase {
   // The literal 96-case specification matrix is intentionally kept together for auditability.
   // swiftlint:disable function_body_length
   func testCodecPreferenceConnectionKindOfferContentsAndWatchdogEventFullMatrix() throws {
+    // CONTEXT.md: “Negotiated Codec: The codec actually flowing after SDP negotiation and any fallback.”
+    // A fallback-producing transition is pending until its replacement H.264 offer arrives.
+    let pendingFallback = MatrixExpectation(
+      videoFormat: .h264, negotiatedCodec: nil, fallbackMemory: .h264)
     let fallback = MatrixExpectation(
       videoFormat: .h264, negotiatedCodec: .h264Fallback, fallbackMemory: .h264)
     let h265 = MatrixExpectation(videoFormat: .h265, negotiatedCodec: .h265, fallbackMemory: .none)
@@ -32,11 +36,11 @@ final class CodecSelectionPolicyTests: XCTestCase {
       MatrixGroup(
         name: "Auto / device selection / no Fallback memory", codecPreference: .auto,
         connectionKind: .operatorInitiatedConnect(.deviceSelection), inputFallbackMemory: .none,
-        expectations: [fallback, fallback, h265, fallback]),
+        expectations: [pendingFallback, pendingFallback, h265, pendingFallback]),
       MatrixGroup(
         name: "H.265 / device selection / no Fallback memory", codecPreference: .h265,
         connectionKind: .operatorInitiatedConnect(.deviceSelection), inputFallbackMemory: .none,
-        expectations: [fallback, fallback, h265, fallback]),
+        expectations: [pendingFallback, pendingFallback, h265, pendingFallback]),
       MatrixGroup(
         name: "H.264 / device selection / no Fallback memory", codecPreference: .h264,
         connectionKind: .operatorInitiatedConnect(.deviceSelection), inputFallbackMemory: .none,
@@ -44,11 +48,11 @@ final class CodecSelectionPolicyTests: XCTestCase {
       MatrixGroup(
         name: "Auto / manual reconnect / no Fallback memory", codecPreference: .auto,
         connectionKind: .operatorInitiatedConnect(.manualReconnect), inputFallbackMemory: .none,
-        expectations: [fallback, fallback, h265, fallback]),
+        expectations: [pendingFallback, pendingFallback, h265, pendingFallback]),
       MatrixGroup(
         name: "H.265 / manual reconnect / no Fallback memory", codecPreference: .h265,
         connectionKind: .operatorInitiatedConnect(.manualReconnect), inputFallbackMemory: .none,
-        expectations: [fallback, fallback, h265, fallback]),
+        expectations: [pendingFallback, pendingFallback, h265, pendingFallback]),
       MatrixGroup(
         name: "H.264 / manual reconnect / no Fallback memory", codecPreference: .h264,
         connectionKind: .operatorInitiatedConnect(.manualReconnect), inputFallbackMemory: .none,
@@ -56,11 +60,11 @@ final class CodecSelectionPolicyTests: XCTestCase {
       MatrixGroup(
         name: "Auto / Codec Preference change / no Fallback memory", codecPreference: .auto,
         connectionKind: .operatorInitiatedConnect(.codecPreferenceChange),
-        inputFallbackMemory: .none, expectations: [fallback, fallback, h265, fallback]),
+        inputFallbackMemory: .none, expectations: [pendingFallback, pendingFallback, h265, pendingFallback]),
       MatrixGroup(
         name: "H.265 / Codec Preference change / no Fallback memory", codecPreference: .h265,
         connectionKind: .operatorInitiatedConnect(.codecPreferenceChange),
-        inputFallbackMemory: .none, expectations: [fallback, fallback, h265, fallback]),
+        inputFallbackMemory: .none, expectations: [pendingFallback, pendingFallback, h265, pendingFallback]),
       MatrixGroup(
         name: "H.264 / Codec Preference change / no Fallback memory", codecPreference: .h264,
         connectionKind: .operatorInitiatedConnect(.codecPreferenceChange),
@@ -68,11 +72,11 @@ final class CodecSelectionPolicyTests: XCTestCase {
       MatrixGroup(
         name: "Auto / Automatic Reconnect / no Fallback memory", codecPreference: .auto,
         connectionKind: .automaticReconnect, inputFallbackMemory: .none,
-        expectations: [fallback, fallback, h265, fallback]),
+        expectations: [pendingFallback, pendingFallback, h265, pendingFallback]),
       MatrixGroup(
         name: "H.265 / Automatic Reconnect / no Fallback memory", codecPreference: .h265,
         connectionKind: .automaticReconnect, inputFallbackMemory: .none,
-        expectations: [fallback, fallback, h265, fallback]),
+        expectations: [pendingFallback, pendingFallback, h265, pendingFallback]),
       MatrixGroup(
         name: "H.264 / Automatic Reconnect / no Fallback memory", codecPreference: .h264,
         connectionKind: .automaticReconnect, inputFallbackMemory: .none,
@@ -81,11 +85,11 @@ final class CodecSelectionPolicyTests: XCTestCase {
       MatrixGroup(
         name: "Auto / device selection / remembered Fallback", codecPreference: .auto,
         connectionKind: .operatorInitiatedConnect(.deviceSelection), inputFallbackMemory: .h264,
-        expectations: [fallback, fallback, h265, fallback]),
+        expectations: [pendingFallback, pendingFallback, h265, pendingFallback]),
       MatrixGroup(
         name: "H.265 / device selection / remembered Fallback", codecPreference: .h265,
         connectionKind: .operatorInitiatedConnect(.deviceSelection), inputFallbackMemory: .h264,
-        expectations: [fallback, fallback, h265, fallback]),
+        expectations: [pendingFallback, pendingFallback, h265, pendingFallback]),
       MatrixGroup(
         name: "H.264 / device selection / remembered Fallback", codecPreference: .h264,
         connectionKind: .operatorInitiatedConnect(.deviceSelection), inputFallbackMemory: .h264,
@@ -93,11 +97,11 @@ final class CodecSelectionPolicyTests: XCTestCase {
       MatrixGroup(
         name: "Auto / manual reconnect / remembered Fallback", codecPreference: .auto,
         connectionKind: .operatorInitiatedConnect(.manualReconnect), inputFallbackMemory: .h264,
-        expectations: [fallback, fallback, h265, fallback]),
+        expectations: [pendingFallback, pendingFallback, h265, pendingFallback]),
       MatrixGroup(
         name: "H.265 / manual reconnect / remembered Fallback", codecPreference: .h265,
         connectionKind: .operatorInitiatedConnect(.manualReconnect), inputFallbackMemory: .h264,
-        expectations: [fallback, fallback, h265, fallback]),
+        expectations: [pendingFallback, pendingFallback, h265, pendingFallback]),
       MatrixGroup(
         name: "H.264 / manual reconnect / remembered Fallback", codecPreference: .h264,
         connectionKind: .operatorInitiatedConnect(.manualReconnect), inputFallbackMemory: .h264,
@@ -105,11 +109,11 @@ final class CodecSelectionPolicyTests: XCTestCase {
       MatrixGroup(
         name: "Auto / Codec Preference change / remembered Fallback", codecPreference: .auto,
         connectionKind: .operatorInitiatedConnect(.codecPreferenceChange),
-        inputFallbackMemory: .h264, expectations: [fallback, fallback, h265, fallback]),
+        inputFallbackMemory: .h264, expectations: [pendingFallback, pendingFallback, h265, pendingFallback]),
       MatrixGroup(
         name: "H.265 / Codec Preference change / remembered Fallback", codecPreference: .h265,
         connectionKind: .operatorInitiatedConnect(.codecPreferenceChange),
-        inputFallbackMemory: .h264, expectations: [fallback, fallback, h265, fallback]),
+        inputFallbackMemory: .h264, expectations: [pendingFallback, pendingFallback, h265, pendingFallback]),
       MatrixGroup(
         name: "H.264 / Codec Preference change / remembered Fallback", codecPreference: .h264,
         connectionKind: .operatorInitiatedConnect(.codecPreferenceChange),
@@ -153,8 +157,7 @@ final class CodecSelectionPolicyTests: XCTestCase {
         let context =
           "\(group.name), offerIncludesH265=\(scenario.offerIncludesH265), watchdogEvent=\(scenario.watchdogEvent)"
         XCTAssertEqual(state.videoFormatForWatchRequest, expected.videoFormat, context)
-        XCTAssertEqual(
-          try XCTUnwrap(state.negotiatedCodec, context), expected.negotiatedCodec, context)
+        XCTAssertEqual(state.negotiatedCodec, expected.negotiatedCodec, context)
         XCTAssertEqual(state.fallbackMemory, expected.fallbackMemory, context)
       }
     }
@@ -190,13 +193,14 @@ final class CodecSelectionPolicyTests: XCTestCase {
 
     XCTAssertEqual(initial.videoFormatForWatchRequest, .h265)
     XCTAssertEqual(state.videoFormatForWatchRequest, .h264)
-    XCTAssertEqual(state.negotiatedCodec, .h264Fallback)
+    XCTAssertNil(state.negotiatedCodec)
     XCTAssertEqual(state.fallbackMemory, .h264)
     XCTAssertEqual(state.action, .reissueVideoWatchRequest(.h264))
     XCTAssertFalse(state.isFirstFrameWatchdogArmed)
 
     let replacementOfferState = CodecSelectionPolicy.handleOffer(
       OfferContents(includesH265: false), state: state)
+    XCTAssertEqual(replacementOfferState.negotiatedCodec, .h264Fallback)
     XCTAssertNil(
       replacementOfferState.action,
       "the replacement offer must not trigger a re-watch loop"
@@ -214,17 +218,19 @@ final class CodecSelectionPolicyTests: XCTestCase {
     state = CodecSelectionPolicy.handleWatchdog(.watchdogFired, state: state)
 
     XCTAssertEqual(state.videoFormatForWatchRequest, .h264)
-    XCTAssertEqual(state.negotiatedCodec, .h264Fallback)
+    XCTAssertNil(state.negotiatedCodec)
     XCTAssertEqual(state.fallbackMemory, .h264)
     XCTAssertEqual(state.action, .reissueVideoWatchRequest(.h264))
     XCTAssertFalse(state.isFirstFrameWatchdogArmed)
 
+    state = CodecSelectionPolicy.handleOffer(OfferContents(includesH265: false), state: state)
+    XCTAssertEqual(state.negotiatedCodec, .h264Fallback)
     state = CodecSelectionPolicy.handleWatchdog(.watchdogFired, state: state)
     XCTAssertNil(state.action, "a fired watchdog transition must issue only one re-watch")
   }
 
-  func testAutomaticReconnectHonorsFallbackMemory() {
-    let state = CodecSelectionPolicy.connect(
+  func testAutomaticReconnectHonorsFallbackMemoryAndPublishesFallbackAfterOffer() {
+    var state = CodecSelectionPolicy.connect(
       codecPreference: .auto,
       connectionKind: .automaticReconnect,
       fallbackMemory: .h264
@@ -232,6 +238,10 @@ final class CodecSelectionPolicyTests: XCTestCase {
 
     XCTAssertEqual(state.videoFormatForWatchRequest, .h264)
     XCTAssertEqual(state.fallbackMemory, .h264)
+    XCTAssertNil(state.negotiatedCodec)
+
+    state = CodecSelectionPolicy.handleOffer(OfferContents(includesH265: false), state: state)
+    XCTAssertEqual(state.negotiatedCodec, .h264Fallback)
   }
 
   func
@@ -263,8 +273,12 @@ final class CodecSelectionPolicyTests: XCTestCase {
     let state = CodecSelectionPolicy.handleOffer(OfferContents(includesH265: false), state: initial)
 
     XCTAssertEqual(state.videoFormatForWatchRequest, .h264)
-    XCTAssertEqual(state.negotiatedCodec, .h264Fallback)
+    XCTAssertNil(state.negotiatedCodec)
     XCTAssertEqual(state.fallbackMemory, .h264)
+
+    let replacementOfferState = CodecSelectionPolicy.handleOffer(
+      OfferContents(includesH265: false), state: state)
+    XCTAssertEqual(replacementOfferState.negotiatedCodec, .h264Fallback)
   }
 
   func testCodecPreferenceH264NeverRequestsH265AndNeverUsesFallback() {
@@ -297,6 +311,8 @@ final class CodecSelectionPolicyTests: XCTestCase {
       connectionKind: .operatorInitiatedConnect(.deviceSelection),
       fallbackMemory: .none
     )
+    fallback = CodecSelectionPolicy.handleOffer(OfferContents(includesH265: false), state: fallback)
+    XCTAssertNil(fallback.negotiatedCodec)
     fallback = CodecSelectionPolicy.handleOffer(OfferContents(includesH265: false), state: fallback)
 
     XCTAssertEqual(native.negotiatedCodec, .h264)

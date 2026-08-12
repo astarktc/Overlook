@@ -107,6 +107,7 @@ class WebRTCManager: NSObject, ObservableObject {
     private var latencyMeasurementStart: Date?
 
     private var lastConnectedDevice: KVMDevice?
+    private var shouldMaintainConnection = false
     private var codecSelectionState: CodecSelectionState?
     private var fallbackMemory: FallbackMemory = .none
     private var suppressFrameArrivalSignalsForWatchdogTesting = false
@@ -117,6 +118,17 @@ class WebRTCManager: NSObject, ObservableObject {
     private var audioDeviceChangeDebounceTask: Task<Void, Never>?
     private var isAutoReconnectInProgress: Bool = false
     private var lastAutoReconnectAt: Date?
+
+    private var iceAutomaticReconnectTask: Task<Void, Never>?
+    private var iceAutomaticReconnectGeneration = 0
+    private var iceAutomaticReconnectAttempts = 0
+    private let iceAutomaticReconnectRetryLimit = 3
+    private let iceDisconnectedGracePeriodNanoseconds: UInt64 = 2_000_000_000
+    private let iceAutomaticReconnectBackoffNanoseconds: [UInt64] = [
+        500_000_000,
+        1_000_000_000,
+        2_000_000_000,
+    ]
 
     private var lastInboundVideoBytesReceived: Int64?
     private var lastInboundVideoBytesTimestamp: TimeInterval?
@@ -194,8 +206,11 @@ class WebRTCManager: NSObject, ObservableObject {
         }
 
         audioDevicesListenerBlock = nil
+        shouldMaintainConnection = false
         audioDeviceChangeDebounceTask?.cancel()
         audioDeviceChangeDebounceTask = nil
+        iceAutomaticReconnectTask?.cancel()
+        iceAutomaticReconnectTask = nil
     }
 
     private func setLastVideoFrameTime(_ time: CFTimeInterval?) {
@@ -282,6 +297,7 @@ class WebRTCManager: NSObject, ObservableObject {
     }
 
     private func shouldAutoReconnectForMissingSelectedDevices() -> Bool {
+        guard shouldMaintainConnection else { return false }
         guard peerConnection != nil else { return false }
 
         let inputUID = (UserDefaults.standard.string(forKey: audioInputDeviceUIDDefaultsKey) ?? "")
@@ -305,7 +321,11 @@ class WebRTCManager: NSObject, ObservableObject {
 
         audioDeviceChangeDebounceTask?.cancel()
         audioDeviceChangeDebounceTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 800_000_000)
+            do {
+                try await Task.sleep(nanoseconds: 800_000_000)
+            } catch {
+                return
+            }
             await MainActor.run {
                 self?.autoReconnectIfStillNeeded()
             }
@@ -313,7 +333,9 @@ class WebRTCManager: NSObject, ObservableObject {
     }
 
     private func autoReconnectIfStillNeeded() {
+        guard shouldMaintainConnection else { return }
         guard isAutoReconnectInProgress == false else { return }
+        guard iceAutomaticReconnectTask == nil else { return }
         guard let device = lastConnectedDevice else { return }
         guard shouldAutoReconnectForMissingSelectedDevices() else { return }
 
@@ -332,16 +354,98 @@ class WebRTCManager: NSObject, ObservableObject {
                 codecPreference: self.codecPreferenceStore.preference(forDeviceID: device.id),
                 connectionKind: .automaticReconnect
             )
+            if self.shouldMaintainConnection == false {
+                self.tearDownConnection()
+            }
         }
     }
     
+    private func cancelPendingICEAutomaticReconnect() {
+        iceAutomaticReconnectGeneration &+= 1
+        iceAutomaticReconnectTask?.cancel()
+        iceAutomaticReconnectTask = nil
+    }
+
+    private func beginOperatorInitiatedConnect(to device: KVMDevice) {
+        cancelPendingICEAutomaticReconnect()
+        audioDeviceChangeDebounceTask?.cancel()
+        audioDeviceChangeDebounceTask = nil
+        iceAutomaticReconnectAttempts = 0
+        lastAutoReconnectAt = nil
+        lastConnectedDevice = device
+        shouldMaintainConnection = true
+    }
+
+    private func scheduleICEAutomaticReconnect(afterNanoseconds delay: UInt64) {
+        guard shouldMaintainConnection else { return }
+        guard iceAutomaticReconnectAttempts < iceAutomaticReconnectRetryLimit else { return }
+        guard iceAutomaticReconnectTask == nil else { return }
+        guard let device = lastConnectedDevice else { return }
+
+        iceAutomaticReconnectGeneration &+= 1
+        let generation = iceAutomaticReconnectGeneration
+        iceAutomaticReconnectTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: delay)
+            } catch {
+                return
+            }
+            guard let self, self.iceAutomaticReconnectGeneration == generation else { return }
+            await self.performICEAutomaticReconnect(to: device, generation: generation)
+        }
+    }
+
+    private func scheduleICEAutomaticReconnectAfterFailure() {
+        let backoffIndex = min(
+            iceAutomaticReconnectAttempts,
+            iceAutomaticReconnectBackoffNanoseconds.count - 1
+        )
+        scheduleICEAutomaticReconnect(
+            afterNanoseconds: iceAutomaticReconnectBackoffNanoseconds[backoffIndex]
+        )
+    }
+
+    private func performICEAutomaticReconnect(to device: KVMDevice, generation: Int) async {
+        guard iceAutomaticReconnectGeneration == generation else { return }
+        guard shouldMaintainConnection, lastConnectedDevice?.id == device.id else { return }
+        guard iceAutomaticReconnectAttempts < iceAutomaticReconnectRetryLimit else { return }
+        if isAutoReconnectInProgress {
+            iceAutomaticReconnectTask = nil
+            scheduleICEAutomaticReconnect(
+                afterNanoseconds: iceAutomaticReconnectBackoffNanoseconds[0]
+            )
+            return
+        }
+
+        iceAutomaticReconnectAttempts += 1
+        isAutoReconnectInProgress = true
+        let didStart = await reconnect(
+            to: device,
+            codecPreference: codecPreferenceStore.preference(forDeviceID: device.id),
+            connectionKind: .automaticReconnect
+        )
+        isAutoReconnectInProgress = false
+
+        if shouldMaintainConnection == false {
+            tearDownConnection()
+            return
+        }
+        guard iceAutomaticReconnectGeneration == generation else { return }
+        iceAutomaticReconnectTask = nil
+        guard shouldMaintainConnection, lastConnectedDevice?.id == device.id else { return }
+        if didStart == false {
+            scheduleICEAutomaticReconnectAfterFailure()
+        }
+    }
+
     func codecPreference(for device: KVMDevice) -> CodecPreference {
         codecPreferenceStore.preference(forDeviceID: device.id)
     }
 
     func setCodecPreference(_ codecPreference: CodecPreference, for device: KVMDevice) async {
         codecPreferenceStore.save(codecPreference, forDeviceID: device.id)
-        guard isConnected else { return }
+        guard shouldMaintainConnection, lastConnectedDevice?.id == device.id else { return }
+        beginOperatorInitiatedConnect(to: device)
         await reconnect(
             to: device,
             codecPreference: codecPreferenceStore.preference(forDeviceID: device.id),
@@ -350,6 +454,7 @@ class WebRTCManager: NSObject, ObservableObject {
     }
 
     func connect(to device: KVMDevice) async throws {
+        beginOperatorInitiatedConnect(to: device)
         try await connect(
             to: device,
             codecPreference: codecPreferenceStore.preference(forDeviceID: device.id),
@@ -440,13 +545,14 @@ class WebRTCManager: NSObject, ObservableObject {
             startStreamHealthMonitoring()
         } catch {
             let reason = "Connect failed: \(String(describing: error))"
-            disconnect()
+            tearDownConnection()
             lastDisconnectReason = reason
             throw error
         }
     }
 
     func reconnect(to device: KVMDevice) async {
+        beginOperatorInitiatedConnect(to: device)
         await reconnect(
             to: device,
             codecPreference: codecPreferenceStore.preference(forDeviceID: device.id),
@@ -454,21 +560,25 @@ class WebRTCManager: NSObject, ObservableObject {
         )
     }
 
+    @discardableResult
     private func reconnect(
         to device: KVMDevice,
         codecPreference: CodecPreference,
         connectionKind: ConnectionKind
-    ) async {
-        disconnect()
+    ) async -> Bool {
+        guard shouldMaintainConnection else { return false }
+        tearDownConnection()
         do {
             try await connect(
                 to: device,
                 codecPreference: codecPreference,
                 connectionKind: connectionKind
             )
+            return true
         } catch {
             isConnecting = false
             lastDisconnectReason = "Reconnect failed: \(String(describing: error))"
+            return false
         }
     }
 
@@ -1332,6 +1442,17 @@ class WebRTCManager: NSObject, ObservableObject {
     }
     
     func disconnect() {
+        shouldMaintainConnection = false
+        lastConnectedDevice = nil
+        iceAutomaticReconnectAttempts = 0
+        cancelPendingICEAutomaticReconnect()
+        audioDeviceChangeDebounceTask?.cancel()
+        audioDeviceChangeDebounceTask = nil
+        isAutoReconnectInProgress = false
+        tearDownConnection()
+    }
+
+    private func tearDownConnection() {
         connectionTimer?.invalidate()
         connectionTimer = nil
 
@@ -1469,6 +1590,7 @@ extension WebRTCManager: @preconcurrency RTCPeerConnectionDelegate {
 
             isConnected = (stateChanged == .connected || stateChanged == .completed)
             if isConnected {
+                cancelPendingICEAutomaticReconnect()
                 isConnecting = false
                 hasEverConnectedToStream = true
                 connectedIceTime = CACurrentMediaTime()
@@ -1479,10 +1601,15 @@ extension WebRTCManager: @preconcurrency RTCPeerConnectionDelegate {
                     negotiatedCodec = nil
                     lastDisconnectReason = "Video connection lost"
                     isConnecting = false
+                    scheduleICEAutomaticReconnect(
+                        afterNanoseconds: iceDisconnectedGracePeriodNanoseconds
+                    )
                 } else if stateChanged == .failed {
                     negotiatedCodec = nil
                     lastDisconnectReason = "Video connection failed"
                     isConnecting = false
+                    cancelPendingICEAutomaticReconnect()
+                    scheduleICEAutomaticReconnectAfterFailure()
                 } else if stateChanged == .closed {
                     negotiatedCodec = nil
                     lastDisconnectReason = "Video connection closed"
@@ -1601,6 +1728,7 @@ extension WebRTCManager: @preconcurrency RTCVideoRenderer {
         let isFirstDecodedFrame = recordVideoFrame(at: now)
         if isFirstDecodedFrame {
             Task { @MainActor in
+                iceAutomaticReconnectAttempts = 0
                 _ = await handleFirstFrameWatchdogEvent(.firstDecodedFrameArrived)
             }
         }

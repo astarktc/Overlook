@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 — Policy module · 03 — Decoder module · 04 — Dependency bump.
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
 - [ ] Connecting to the Comet in Auto negotiates and streams live H.265 at 2560×1440@60 (device follows the client's Watch Request; no persistent device configuration is read or written)
   - Pending operator verification against the production Comet.
