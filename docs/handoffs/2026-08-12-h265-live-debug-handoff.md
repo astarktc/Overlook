@@ -2,6 +2,59 @@
 
 Date: 2026-08-12 · From: implementation/debug session (tickets 01–07 + live diagnosis) · Repo: `/Users/alexstark/Projects/forks/Overlook` · Branch: `feature/h265-receive` · HEAD: `cb36037`, clean tree, nothing pushed.
 
+## ✅ RESOLVED ADDENDUM (2026-08-12, same-day device-access session) — READ THIS FIRST
+
+The diagnosis below is OBSOLETE in its conclusion (kept for history). With direct device
+access (`docs/agents/comet-device-access.md`) the root cause was found and reproduced
+deterministically in both directions:
+
+**Root cause: encoder/SDP codec mismatch, not packetization.** The Janus watch's
+`video_format` shapes ONLY the SDP (`us_rtpv_make_sdp in video_format N` — device log);
+the actual encoder format follows kvmd (the volatile `config.json` key, which had been
+silently dropped — encoder at `--venc-format=0`). Every failing live run received
+**H.264 bits labeled H.265**: libwebrtc's RFC 7798 depacketizer parses them without
+warnings, but `H26xPacketBuffer` never sees an HEVC VPS → silent infinite discard →
+`framesReceived=0`, endless PLIs, watchdog fallback (which then works because the
+encoder really was H.264). The earlier probe conclusion “the device honors the client
+request” was wrong — only the SDP honors it.
+
+**Evidence (all reproducible):**
+
+1. Wire capture (`.scratch/h265-receive/tools/rtp_trace.py`, GStreamer webrtcbin via
+   auth-free SSH tunnel to the Janus unix socket): with the encoder REALLY in H.265 the
+   GL packetizer is textbook-correct — VPS+SPS+PPS as single-NALU packets sharing the
+   IRAP's RTP timestamp, FU-fragmented IDR, marker on last packet only, 12/12 groups,
+   at 2–20 Mbps, with and without rtx/extmap negotiation. **All packetization
+   hypotheses (H1/H2/H3) refuted; GL's plugin is exonerated.** (One curiosity: when the
+   client negotiates extmaps, the plugin adds a playout-delay extension `{min=0,max=0}`
+   to every packet — harmless.)
+2. `OverlookTests/H265LiveWireDiagnosticTests.swift` (env-gated diagnostic): the REAL
+   `WebRTCManager` — full pipeline, policy, watchdog, decoder factory — against the same
+   tunnel: **1000+ frames decoded and rendered at 2560x1440@60**, decoder created, zero
+   PLIs, at up to ~2,200 pkts/s (the live failure rate). Client stack fully exonerated,
+   including the repinned M150 binary and our VideoToolbox decoder — live, not just
+   offline fixtures.
+3. Mismatch reproduction: encoder forced to `--venc-format=0`, watch `video_format=1` →
+   EXACT live-failure signature (SDP `includesH265=1`, packets flow, `framesReceived=0`,
+   pliCount climbing, watchdog at 5.4 s, H.264 fallback renders immediately).
+4. kvmd pyc introspection (rm10-1.9.0): `__streamer_set_params_handler` accepts
+   `video_format` → **`POST /api/streamer/set_params?video_format=N` is the supported,
+   client-driven fix** (kvmd restarts the streamer on param change, same as quality/fps).
+
+**State after this session:** device restored as found (no stray processes, temp files
+removed, `video_format: 1` in config — BDA restored it), tunnels closed. New tracker
+issue `10-set-encoder-video-format-via-kvmd-api.md` (`ready-for-agent`) carries the
+durable fix. With the config key currently 1, live H.265 in Overlook likely works TODAY
+unchanged — but the key is volatile (see `docs/agents/comet-device-access.md`), so
+ship issue 10 before calling tickets 04–08 done. Diagnostic assets kept: the rtp_trace
+tool, the env-gated live-diagnostic tests (skipped unless `OVERLOOK_H265_WIRE_DIAG=1`),
+and six app sources now also compiled into the test target for the manager-level test.
+Re-run recipe: tunnel `ssh -N -L 8080:/run/kvmd/janus-ws.sock root@100.92.27.77` (+8188
+for the tracer), start an encoder per the device-access doc, then
+`TEST_RUNNER_OVERLOOK_H265_WIRE_DIAG=1 xcodebuild … -only-testing:OverlookTests/H265LiveWireDiagnosticTests test-without-building`.
+
+---
+
 ## State in one paragraph
 
 All 7 implementation tickets are DONE, reviewed (two-axis + 2 adversarial rounds), and green: 22 tests, Release build, app installed. Live H.264 works end-to-end including the new fallback/watchdog/auto-reconnect machinery (proven in live runs). Live H.265 does NOT flow yet — the client is **proven correct at every layer we control**; the wall is inside libwebrtc frame assembly fed by the GL Janus plugin's RTP packetization (details below, with the full evidence chain). A researcher run on the GL packetizer source may still be running/complete — check `subagent` children / `.pi-subagents/artifacts/` for `gl-janus-h265-packetizer-research` output. Next session gains device access via the BDA agent over intercom (operator will arrange) — making device-side capture/config possible without operator relay.
@@ -31,9 +84,9 @@ Instrumented probe trail (stderr captures in `/tmp/overlook-stderr*.log`, latest
 6. Fable-5 fresh review (artifact `d0014587_reviewer_0_output.md`) verified against actual branch-heads/7889 (M150) source: field-trial gating REFUTED (`H26xPacketBuffer` is unconditional for H265 at M150; `WebRTC-Video-H26xPacketBuffer` trial gates H264 only), ObjC factory translation REFUTED, depacketizer install REFUTED. **Remaining wall: `H26xPacketBuffer` requires VPS+SPS+PPS in-band within the SAME assembled frame as the IRAP (h26x_packet_buffer.cc:153-165, 266-283 @7889) and discards silently otherwise.**
 7. Our fixtures prove parameter sets exist at the **encoder memsink** (`ustreamer-dump`, VPS+SPS+PPS before every IDR, 14/14). What the **Janus plugin's packetizer** does with them on the wire is the open question — GL's packetizer sits between memsink and RTP.
 
-### Safari cross-check — INCONCLUSIVE
+### Safari cross-check — INCONCLUSIVE (cause found 2026-08-12)
 
-Operator tried Safari→GL web UI: it did NOT come up H.265 this time. Previously H.265-in-Safari was achieved via the device-side persistent setting (`video_format: 1` in `/etc/kvmd/user/config.json`), which may have been overwritten (candidates: operator's set_params fiddling via Overlook settings, GL UI, or firmware behavior — unknown). So "Safari decodes this device's H.265 wire format" is UNVERIFIED as a current fact. Do not treat WebKit-tolerance as established.
+Operator tried Safari→GL web UI: it did NOT come up H.265 this time. **Cause found by BDA 2026-08-12**: the `video_format` key had been silently DROPPED from `/etc/kvmd/user/config.json` (GL client config rewrite; see `docs/agents/comet-device-access.md`), so the web UI requested H.264. BDA restored `video_format: 1`. "Safari decodes this device's H.265 wire format" remains UNVERIFIED as a current fact until re-checked. Do not treat WebKit-tolerance as established.
 
 ## Hypotheses for the wall (ranked, untested)
 
@@ -53,13 +106,13 @@ The packetizer research superseded the ranking above. Key facts (primary-sourced
 - **Client-side workarounds**: essentially none worth doing (SDP-munge to H.264 = what our fallback already achieves gracefully; a GStreamer re-packetizing relay is out of product scope; insertable streams can't help — they sit downstream of the discarding buffer).
 - **Device-side remedy (needs GL patch — no config flag exists; GL deliberately hides H.265, "patent issues" per staff forum post)**: keep VPS/SPS/PPS in-band with the IDR's timestamp, marker on last NALU — ~5-line diff in their `rtpv` H.265 branch if it diverged from upstream's shape.
 
-Discriminating evidence to collect (now possible with device access via BDA):
+Discriminating evidence to collect (device access: `docs/agents/comet-device-access.md`):
 
-1. **Fastest (seconds): grep the device rootfs / plugin** — `rg 'sprop|H265/90000' /usr/lib/janus/plugins/libjanus_ustreamer.so` (+ `strings` it). `sprop-vps` present in the SDP template ≈ near-proof of H1.
-2. **Check the actual offer fmtp**: our probes log only `includesH265` — capture the full `m=video` section of the device's offer (one-line instrumentation addition in `handleOfferSDP`, or read it off the device). `sprop-*` present ⇒ H1.
-3. **Decisive: per-RTP-packet trace `(seq, timestamp, marker, NAL type = (b0>>1)&0x3F)`** via a non-libwebrtc client attached to the same Janus plugin (aiortc or `gst webrtcbin`) — discriminates H1/H2/H3 in one capture. Look for types 32/33/34 vs 19, timestamp equality, marker placement, and any type 48/49 usage.
-4. Re-confirm the memsink AU shape on rm10-1.9.0 (`ustreamer-dump`, as BDA did for the fixtures) — decides which remedy applies.
-5. Restore device `video_format: 1` and re-run the Safari check — but per above, treat it only as a sanity signal, not an oracle.
+1. ~~Grep the plugin binary~~ **DONE (BDA, 2026-08-12)**: `libjanus_ustreamer.so` has `_rtpv_process_h265_nalu` + an H265 SDP template (`rtpmap H265/90000`, `fmtp profile-id=1`, **NO `sprop-*` attributes**), and NO strings suggesting param-set caching/re-injection — consistent with a naive forward-as-they-come packetizer. Rules out the "param sets moved to out-of-band `sprop-*`" variant of H1; H1-strip vs H2-timestamp-split remains open.
+2. **Check the actual offer fmtp**: our probes log only `includesH265` — capture the full `m=video` section of the device's offer (one-line instrumentation addition in `handleOfferSDP`, or read it off the device). (Template says no `sprop-*`; confirm live offer matches.)
+3. **Decisive: per-RTP-packet trace `(seq, timestamp, marker, NAL type = (b0>>1)&0x3F)`** via a non-libwebrtc client attached to the same Janus plugin (aiortc or `gst webrtcbin`) — discriminates H1/H2/H3 in one capture. Look for types 32/33/34 vs 19, timestamp equality, marker placement, and any type 48/49 usage. Tip (BDA): diff observations against upstream pikvm/ustreamer's `us_rtpv_wrap` (GPL, public, likely ancestor of GL's plugin) to localize the bug without GL source.
+4. ~~Re-confirm the memsink AU shape on rm10-1.9.0~~ **DONE (BDA fixtures)**: memsink AUs arrive contiguous `[VPS SPS PPS IDR]` per keyframe — so if the wire splits them, the split happens inside the packetizer.
+5. ~~Restore device `video_format: 1`~~ **DONE (BDA, 2026-08-12)** — and the Safari-H.264 mystery is SOLVED: something (likely the GL web UI/app) rewrote `/etc/kvmd/user/config.json` and dropped the `video_format` key entirely; streamer was back at `--venc-format=0`. `config.json` is volatile — see `docs/agents/comet-device-access.md`. Overlook is immune (it sends `video_format: 1` per watch request). Safari re-check still pending, sanity signal only, not an oracle.
 
 ## Live environment state
 
@@ -77,7 +130,7 @@ Discriminating evidence to collect (now possible with device access via BDA):
 
 ## Coordination
 
-- BDA session (pi-intercom, cwd `~/Library/CloudStorage/OneDrive-Personal/AI_Projects/BraindumpAssistant`) owns device-side state and mirrors milestones to Plane LAB-28. **The operator will have BDA send device-access info via intercom at the start of the next session** — after that, device-side capture/inspection can be done directly (still: it's a production tool on the operator's work Mac; be conservative, never reboot/reconfigure without explicit approval, prefer read-only capture).
+- BDA session (pi-intercom, cwd `~/Library/CloudStorage/OneDrive-Personal/AI_Projects/BraindumpAssistant`) owns device-side state and mirrors milestones to Plane LAB-28. **Device access is now operator-authorized and documented in `docs/agents/comet-device-access.md`** (delivered via BDA intercom 2026-08-12; supersedes the ask-BDA-first rule) — device-side capture/inspection can be done directly (still: it's a production tool on the operator's work Mac; be conservative, never reboot/reconfigure without explicit approval, prefer read-only capture).
 - Tooling quirks that held all session: tree-sitter/module_report fails on this repo's Swift (use grep+reads); pi-lens clangd shows false-positive ObjC errors (WebRTC headers not in its include path — xcodebuild is the authority); pbxproj object IDs are hand-allocated sequential hex — CHECK FOR COLLISIONS before adding (one collision cost a broken build this session); child workers on cortex-responses/openai-gpt-5.6-sol worked well for tickets, `anthropic/claude-fable-5` for hard review (cortex route to fable was unavailable).
 
 ## Next actions (in order)

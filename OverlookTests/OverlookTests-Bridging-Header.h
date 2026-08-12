@@ -5,5 +5,7 @@
 // production-only API.
 #import "../Overlook/OverlookVideoDecoderFactory.h"
 #import "../Overlook/RTCVideoDecoderH265.h"
+#import "../Overlook/RTCAudioDeviceShim.h"
+#import "../Overlook/WebRTCFactoryBuilder.h"
 
 NSInteger OverlookReleaseDecoder(RTCVideoDecoderH265 *decoder);

@@ -53,6 +53,14 @@
 		01000035 /* SDPOfferParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000033 /* SDPOfferParser.swift */; };
 		01000036 /* SDPOfferParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000034 /* SDPOfferParserTests.swift */; };
 		01000039 /* WebRTCBinaryH265SupportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000036 /* WebRTCBinaryH265SupportTests.swift */; };
+		0100003A /* H265LiveWireDiagnosticTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000037 /* H265LiveWireDiagnosticTests.swift */; };
+		0100003B /* WebRTCManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000006 /* WebRTCManager.swift */; };
+		0100003C /* KVMDeviceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000009 /* KVMDeviceManager.swift */; };
+		0100003D /* GLKVMClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000015 /* GLKVMClient.swift */; };
+		0100003E /* JSONValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000011 /* JSONValue.swift */; };
+		0100003F /* WebRTCAudioDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200001D /* WebRTCAudioDevice.swift */; };
+		01000040 /* CoreAudioDevices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200001C /* CoreAudioDevices.swift */; };
+		01000041 /* WebRTCFactoryBuilder.m in Sources */ = {isa = PBXBuildFile; fileRef = 02000021 /* WebRTCFactoryBuilder.m */; };
 		01000037 /* CodecPreferenceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000035 /* CodecPreferenceStore.swift */; };
 		01000038 /* CodecPreferenceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000035 /* CodecPreferenceStore.swift */; };
 /* End PBXBuildFile section */
@@ -103,6 +111,7 @@
 		02000033 /* SDPOfferParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SDPOfferParser.swift; sourceTree = "<group>"; };
 		02000034 /* SDPOfferParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SDPOfferParserTests.swift; sourceTree = "<group>"; };
 		02000036 /* WebRTCBinaryH265SupportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCBinaryH265SupportTests.swift; sourceTree = "<group>"; };
+		02000037 /* H265LiveWireDiagnosticTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = H265LiveWireDiagnosticTests.swift; sourceTree = "<group>"; };
 		02000035 /* CodecPreferenceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodecPreferenceStore.swift; sourceTree = "<group>"; };
 		03000001 /* Overlook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Overlook.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		03000002 /* OverlookTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OverlookTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -199,6 +208,7 @@
 				02000027 /* CodecSelectionPolicyTests.swift */,
 				02000034 /* SDPOfferParserTests.swift */,
 				02000036 /* WebRTCBinaryH265SupportTests.swift */,
+				02000037 /* H265LiveWireDiagnosticTests.swift */,
 				0200002F /* H265DecoderTests.swift */,
 				02000032 /* H265DecoderTestSupport.m */,
 				0200002E /* OverlookTests-Bridging-Header.h */,
@@ -375,6 +385,14 @@
 				01000035 /* SDPOfferParser.swift in Sources */,
 				01000036 /* SDPOfferParserTests.swift in Sources */,
 				01000039 /* WebRTCBinaryH265SupportTests.swift in Sources */,
+				0100003A /* H265LiveWireDiagnosticTests.swift in Sources */,
+				0100003B /* WebRTCManager.swift in Sources */,
+				0100003C /* KVMDeviceManager.swift in Sources */,
+				0100003D /* GLKVMClient.swift in Sources */,
+				0100003E /* JSONValue.swift in Sources */,
+				0100003F /* WebRTCAudioDevice.swift in Sources */,
+				01000040 /* CoreAudioDevices.swift in Sources */,
+				01000041 /* WebRTCFactoryBuilder.m in Sources */,
 				01000026 /* CodecSelectionPolicyTests.swift in Sources */,
 				01000028 /* H265NaluParser.m in Sources */,
 				0100002A /* RTCVideoDecoderH265.m in Sources */,
