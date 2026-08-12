@@ -11,6 +11,22 @@ public enum VideoFormat: Int, Equatable, Sendable {
   case h265 = 1
 }
 
+extension VideoFormat {
+  /// kvmd streamer params that pin the device encoder to this format
+  /// (`POST /api/streamer/set_params?video_format=N`).
+  ///
+  /// A Janus watch request's `video_format` shapes only the SDP the plugin
+  /// offers — the encoder's real format follows kvmd. Without this pin, the
+  /// device can stream one codec labeled as the other, which libwebrtc
+  /// discards silently (root cause of the 2026-08-12 live H.265 failure; see
+  /// `.scratch/h265-receive/issues/10-set-encoder-video-format-via-kvmd-api.md`).
+  /// kvmd only restarts the encoder when the value actually changes, so
+  /// sending this unconditionally is idempotent and gap-free in steady state.
+  public var streamerParams: [String: String] {
+    ["video_format": String(rawValue)]
+  }
+}
+
 /// The Negotiated Codec displayed for the active stream.
 ///
 /// `h264Fallback` preserves the visible Fallback provenance required by the status surface.

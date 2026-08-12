@@ -290,6 +290,22 @@ struct ContentView: View {
             inputManager.setup(with: webRTCManager)
             inputManager.setGLKVMClient(kvmDeviceManager.glkvmClient)
 
+            // Issue 10: pin the device encoder's format via the authenticated
+            // kvmd API before each video watch request, so the encoder always
+            // matches the SDP. Reads glkvmClient at call time (the client is
+            // replaced on each device connect). Left as-set on disconnect by
+            // design — see the issue for the writer-conflict discussion.
+            webRTCManager.encoderFormatPinner = { [weak kvmDeviceManager] videoFormat in
+                guard let client = kvmDeviceManager?.glkvmClient else { return false }
+                do {
+                    try await client.setStreamerParams(videoFormat.streamerParams)
+                    return true
+                } catch {
+                    NSLog("[Overlook] set_params video_format failed: %@", String(describing: error))
+                    return false
+                }
+            }
+
             updateInputCaptureForUIOverlays()
 
             if !didAutoOpenConnections, !isConnected {

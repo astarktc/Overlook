@@ -353,4 +353,15 @@ final class CodecPreferenceStoreTests: XCTestCase {
     defaults.removePersistentDomain(forName: suiteName)
     return (CodecPreferenceStore(defaults: defaults), defaults, suiteName)
   }
+
+  // MARK: Issue 10 — encoder format pinning
+
+  func testStreamerParamsPinEncoderFormatToTheWatchRequestWireValues() {
+    // The kvmd set_params contract: the same 0/1 wire values as the Janus
+    // watch request, under the exact key kvmd's `__streamer_set_params_handler`
+    // accepts (verified on rm10-1.9.0). A Janus watch alone shapes only the
+    // SDP; this pin is what makes the encoder match it.
+    XCTAssertEqual(VideoFormat.h264.streamerParams, ["video_format": "0"])
+    XCTAssertEqual(VideoFormat.h265.streamerParams, ["video_format": "1"])
+  }
 }

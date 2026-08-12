@@ -2,7 +2,7 @@
 
 **What to build:** When Overlook connects (and on codec-preference change / fallback), set the device's actual encoder format through the authenticated kvmd API — `POST /api/streamer/set_params?video_format=N` via the existing `GLKVMClient.setStreamerParams` — so the encoder always matches the codec negotiated in the Janus watch/SDP.
 
-**Status:** ready-for-agent
+**Status:** ready-for-human (implemented; formal live-verify pass pending)
 
 **Why (root cause of the live H.265 failure, proven 2026-08-12):** the Janus watch's
 `video_format` parameter shapes ONLY the SDP the GL plugin offers (`us_rtpv_make_sdp in
@@ -18,13 +18,14 @@ and rendered at 2560x1440@60 through the REAL WebRTCManager; encoder H.264 + wat
 `video_format` (verified by pyc introspection on rm10-1.9.0) and kvmd restarts the
 streamer on param changes, exactly like the existing quality/fps switching.
 
-- [ ] Decide placement: KVMDeviceManager connect flow and/or WebRTCManager codec-selection actions (set_params BEFORE the video watch request so the offer and bits match)
-- [ ] Send `video_format` on: initial connect (per codec selection), codec-preference change, and H.264 fallback re-watch
-- [ ] Handle the encoder-restart window (~1-2 s stream gap after a format change; the watchdog must not misfire during it)
-- [ ] Writer-conflict + disconnect policy: once Overlook actively sets the encoder codec, Overlook and the GL web UI/Safari can fight over persisted encoder state (last writer wins; the web UI writes H.264 whenever its capability check fails, e.g. from Edge). Decide whether Overlook restores the device's prior `video_format` on disconnect or leaves-as-set — coordinate with BDA: the operator's standing-codec preference is tracked device-side as Plane LAB-29, to be synced with this ticket's behavior
-- [ ] Consider interplay with the parked `-999 cancelled` set_params issue (rapid successive calls)
-- [ ] Unit-test the policy wiring; live-verify H.265 end-to-end (tickets 04–08 checkboxes)
-- [ ] Leave device codec state as found or report changes (operator guardrail)
+- [x] Decide placement: single chokepoint — `WebRTCManager.sendVideoWatchRequest` calls an injected `encoderFormatPinner` closure (wired in ContentView to `GLKVMClient.setStreamerParams`) BEFORE sending each video watch, so the offer and bits always match
+- [x] Send `video_format` on: initial connect, codec-preference change, and H.264 fallback re-watch — all three flow through the chokepoint
+- [x] Handle the encoder-restart window: kvmd only restarts the streamer when the param value actually CHANGES, so the unconditional pin is idempotent/gap-free in steady state; a genuine format change restarts the encoder while ICE/DTLS are still setting up, and the first-frame watchdog remains the safety net (pin is fail-soft: watch proceeds on pin failure, with a clear log line)
+- [x] Writer-conflict + disconnect policy DECIDED: **leave-as-set on disconnect** (no restore write; restoring would need prior-state tracking plus a racy write during teardown, and other GL clients self-heal by writing their own format). Documented at the ContentView wiring. Outstanding: sync with BDA's LAB-29 (operator's standing-codec preference) once that lands — leave-as-set is compatible with any LAB-29 outcome since the standing preference is device-side state
+- [x] `-999 cancelled` interplay: one sequential awaited call per watch-triggering event (no rapid repetition introduced); the parked issue is about the settings-panel path and remains parked
+- [x] Unit test: `testStreamerParamsPinEncoderFormatToTheWatchRequestWireValues` (kvmd key + wire values); pin-before-watch ordering asserted live in the env-gated `testRealWebRTCManagerAgainstLocalJanusTunnel` (recorder pinner; verified against the real device 2026-08-12: pin → watch → first rendered frame, running as a second watcher beside the operator's live session)
+- [ ] Formal live-verify H.265 end-to-end with real set_params in the loop (tickets 04–08 checkboxes, BDA observing device-side)
+- [x] Leave device codec state as found or report changes: verification used a recorder pinner only — no device state was touched
 
 ## Comments
 

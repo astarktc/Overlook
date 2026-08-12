@@ -833,11 +833,37 @@ class WebRTCManager: NSObject, ObservableObject {
         startJanusKeepAlive()
     }
 
+    /// Injected by the UI layer (ContentView): pins the device encoder's video
+    /// format through the authenticated kvmd API (`streamer/set_params`) so the
+    /// encoder always matches the codec our watch request negotiates in SDP.
+    /// Returns false when pinning was skipped or failed. Fail-soft: the watch
+    /// proceeds regardless, and the first-frame watchdog remains the safety net
+    /// for a genuine mismatch. See issue 10 for the root-cause background.
+    var encoderFormatPinner: ((VideoFormat) async -> Bool)?
+
+    private func pinEncoderFormat(_ videoFormat: VideoFormat) async {
+        guard let pinner = encoderFormatPinner else {
+            NSLog("[Overlook] encoder format pinner not wired; watch proceeds unpinned (video_format=%d)",
+                  videoFormat.rawValue)
+            return
+        }
+        if await pinner(videoFormat) {
+            NSLog("[Overlook] encoder format pinned to video_format=%d", videoFormat.rawValue)
+        } else {
+            NSLog("[Overlook] encoder format pin FAILED (video_format=%d); relying on watchdog fallback",
+                  videoFormat.rawValue)
+        }
+    }
+
     private func sendVideoWatchRequest(videoFormat: VideoFormat) async throws {
         guard let sessionId = janusSessionId,
               let handleId = janusHandleId else {
             throw WebRTCError.signalingConnectionLost
         }
+
+        // Issue 10: make the encoder's real format match the SDP this watch
+        // will negotiate, BEFORE the device builds the offer/stream.
+        await pinEncoderFormat(videoFormat)
 
         NSLog("[DEBUG-h265] sending video Watch Request video_format=%d", videoFormat.rawValue)
         try await sendJanusMessage([

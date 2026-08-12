@@ -66,6 +66,20 @@ final class H265LiveWireDiagnosticTests: XCTestCase {
         )
 
         let manager = WebRTCManager()
+
+        // Issue 10 seam: record every encoder-format pin the manager issues.
+        // (No kvmd API in this environment — the tunnel is auth-free — so the
+        // recorder just proves the wiring and ordering.)
+        final class PinRecorder: @unchecked Sendable {
+            var formats: [VideoFormat] = []
+        }
+        let recorder = PinRecorder()
+        manager.encoderFormatPinner = { format in
+            recorder.formats.append(format)
+            NSLog("[DIAG-h265-mgr] encoderFormatPinner called with video_format=%d", format.rawValue)
+            return true
+        }
+
         let connectTask = Task { @MainActor in
             do {
                 try await manager.connect(to: device)
@@ -84,6 +98,11 @@ final class H265LiveWireDiagnosticTests: XCTestCase {
         manager.disconnect()
         RunLoop.main.run(until: Date(timeIntervalSinceNow: 1))
         NSLog("[DIAG-h265-mgr] test window complete — grep [DEBUG-h265] for verdict")
+
+        XCTAssertEqual(
+            recorder.formats.first, .h265,
+            "the initial watch request must pin the encoder to the negotiated format first"
+        )
     }
 }
 
