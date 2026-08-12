@@ -4,10 +4,20 @@
 
 **Blocked by:** 01 — Test scaffolding.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] The module is pure (no networking, no UI, no persistence, no timers — callers own all side effects)
-- [ ] Table-driven tests cover the full matrix: preference × connection kind × offer content × watchdog outcome
-- [ ] Covered explicitly: Auto negotiates H.265 happy path; offer-based fallback; watchdog fallback; fallback memory honored by Automatic Reconnect; memory cleared by each kind of Operator-Initiated Connect (device selection, manual reconnect, preference change); explicit H.265 pin falls back visibly; explicit H.264 pin never requests H.265
-- [ ] The Negotiated Codec output distinguishes a fallback result from a natively-negotiated one (feeds the "(fallback)" display later)
-- [ ] All tests green via the command-line test invocation
+- [x] The module is pure (no networking, no UI, no persistence, no timers — callers own all side effects)
+- [x] Table-driven tests cover the full matrix: preference × connection kind × offer content × watchdog outcome
+- [x] Covered explicitly: Auto negotiates H.265 happy path; offer-based fallback; watchdog fallback; fallback memory honored by Automatic Reconnect; memory cleared by each kind of Operator-Initiated Connect (device selection, manual reconnect, preference change); explicit H.265 pin falls back visibly; explicit H.264 pin never requests H.265
+- [x] The Negotiated Codec output distinguishes a fallback result from a natively-negotiated one (feeds the "(fallback)" display later)
+- [x] All tests green via the command-line test invocation
+
+## Comments
+
+- Added `CodecSelectionPolicy.swift` as a pure transition module compiled directly into both the app and non-hosted test targets. Its `connect`, `handleOffer`, and `handleWatchdog` interface returns the next Watch Request Video Format, optional Negotiated Codec, and session-scoped Fallback memory without performing side effects.
+- Modeled H.264 results as `.h264` versus `.h264Fallback`, preserving visible Fallback provenance. `VideoFormat` uses the required wire values (`h264 = 0`, `h265 = 1`).
+- An Operator-Initiated Connect carries an explicit reason (`deviceSelection`, `manualReconnect`, or `codecPreferenceChange`) and always clears Fallback memory. Automatic Reconnect honors remembered Fallback for Auto and H.265. Explicit H.264 clears/ignores Fallback memory and never requests H.265.
+- TDD evidence: the first test run failed as expected with exit 65 because the policy types did not exist; implementation then made the suite green.
+- Tests: 10 new XCTest methods, including a table-driven 96-row matrix covering both Fallback-memory inputs across 3 Codec Preferences × 4 concrete connection cases (3 Operator-Initiated Connect reasons plus Automatic Reconnect) × 2 offer contents × 2 watchdog events.
+- Test command (exit 0): `xcodebuild -project Overlook.xcodeproj -scheme Overlook -configuration Debug -derivedDataPath /tmp/overlook-tests -destination 'platform=macOS' CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= test`
+- Release build command (exit 0): `xcodebuild -project Overlook.xcodeproj -scheme Overlook -configuration Release -derivedDataPath /tmp/overlook-build -destination 'platform=macOS' CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= build`

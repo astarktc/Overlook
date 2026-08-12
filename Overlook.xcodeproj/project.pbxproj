@@ -33,6 +33,9 @@
 		01000021 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 02000023 /* README.md */; };
 		01000022 /* lab28-h265-sample.bin in Resources */ = {isa = PBXBuildFile; fileRef = 02000024 /* lab28-h265-sample.bin */; };
 		01000023 /* lab28-h265-rejoin.bin in Resources */ = {isa = PBXBuildFile; fileRef = 02000025 /* lab28-h265-rejoin.bin */; };
+		01000024 /* CodecSelectionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000026 /* CodecSelectionPolicy.swift */; };
+		01000025 /* CodecSelectionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000026 /* CodecSelectionPolicy.swift */; };
+		01000026 /* CodecSelectionPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000027 /* CodecSelectionPolicyTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -65,6 +68,8 @@
 		02000023 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		02000024 /* lab28-h265-sample.bin */ = {isa = PBXFileReference; lastKnownFileType = file; path = "lab28-h265-sample.bin"; sourceTree = "<group>"; };
 		02000025 /* lab28-h265-rejoin.bin */ = {isa = PBXFileReference; lastKnownFileType = file; path = "lab28-h265-rejoin.bin"; sourceTree = "<group>"; };
+		02000026 /* CodecSelectionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodecSelectionPolicy.swift; sourceTree = "<group>"; };
+		02000027 /* CodecSelectionPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodecSelectionPolicyTests.swift; sourceTree = "<group>"; };
 		03000001 /* Overlook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Overlook.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		03000002 /* OverlookTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OverlookTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -101,6 +106,7 @@
 			isa = PBXGroup;
 			children = (
 				02000001 /* OverlookApp.swift */,
+				02000026 /* CodecSelectionPolicy.swift */,
 				02000002 /* ContentView.swift */,
 				02000019 /* ContentControlBar.swift */,
 				0200001A /* VideoSurfaceView.swift */,
@@ -142,6 +148,7 @@
 			isa = PBXGroup;
 			children = (
 				02000022 /* OverlookTests.swift */,
+				02000027 /* CodecSelectionPolicyTests.swift */,
 				05000005 /* Fixtures */,
 			);
 			path = OverlookTests;
@@ -267,6 +274,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				01000001 /* OverlookApp.swift in Sources */,
+				01000024 /* CodecSelectionPolicy.swift in Sources */,
 				01000002 /* ContentView.swift in Sources */,
 				0100001A /* ContentControlBar.swift in Sources */,
 				0100001B /* VideoSurfaceView.swift in Sources */,
@@ -294,6 +302,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				01000020 /* OverlookTests.swift in Sources */,
+				01000025 /* CodecSelectionPolicy.swift in Sources */,
+				01000026 /* CodecSelectionPolicyTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
