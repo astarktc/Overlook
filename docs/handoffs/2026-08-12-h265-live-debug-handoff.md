@@ -41,6 +41,14 @@ request” was wrong — only the SDP honors it.
    `video_format` → **`POST /api/streamer/set_params?video_format=N` is the supported,
    client-driven fix** (kvmd restarts the streamer on param change, same as quality/fps).
 
+**LIVE CONFIRMATION (2026-08-12, ~12:29):** operator connected Overlook — status bar
+“H.265”, video running; device-side verified simultaneously (kvmd-managed ustreamer
+`--venc-format=1`, 2560x1440@60 captured). Live H.265 works end-to-end with zero client
+changes, as predicted. (Operator hit a one-off 403 first: stale auth token from an
+earlier kvmd restart → password re-prompt + a typo; second attempt succeeded. Note kvmd
+rate-limits logins: 10 attempts/600 s window, 600 s lockout.) Formal tickets 04–08
+verify pass + issue 10 + instrumentation strip still pending.
+
 **State after this session:** device restored as found (no stray processes, temp files
 removed, `video_format: 1` in config — BDA restored it), tunnels closed. New tracker
 issue `10-set-encoder-video-format-via-kvmd-api.md` (`ready-for-agent`) carries the
