@@ -36,6 +36,19 @@
 		01000024 /* CodecSelectionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000026 /* CodecSelectionPolicy.swift */; };
 		01000025 /* CodecSelectionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000026 /* CodecSelectionPolicy.swift */; };
 		01000026 /* CodecSelectionPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000027 /* CodecSelectionPolicyTests.swift */; };
+		01000027 /* H265NaluParser.m in Sources */ = {isa = PBXBuildFile; fileRef = 02000029 /* H265NaluParser.m */; };
+		01000028 /* H265NaluParser.m in Sources */ = {isa = PBXBuildFile; fileRef = 02000029 /* H265NaluParser.m */; };
+		01000029 /* RTCVideoDecoderH265.m in Sources */ = {isa = PBXBuildFile; fileRef = 0200002B /* RTCVideoDecoderH265.m */; };
+		0100002A /* RTCVideoDecoderH265.m in Sources */ = {isa = PBXBuildFile; fileRef = 0200002B /* RTCVideoDecoderH265.m */; };
+		0100002B /* OverlookVideoDecoderFactory.m in Sources */ = {isa = PBXBuildFile; fileRef = 0200002D /* OverlookVideoDecoderFactory.m */; };
+		0100002C /* OverlookVideoDecoderFactory.m in Sources */ = {isa = PBXBuildFile; fileRef = 0200002D /* OverlookVideoDecoderFactory.m */; };
+		0100002D /* H265DecoderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200002F /* H265DecoderTests.swift */; };
+		0100002E /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = 14000001 /* WebRTC */; };
+		0100002F /* VideoToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 02000030 /* VideoToolbox.framework */; };
+		01000030 /* CoreMedia.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 02000031 /* CoreMedia.framework */; };
+		01000031 /* VideoToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 02000030 /* VideoToolbox.framework */; };
+		01000032 /* CoreMedia.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 02000031 /* CoreMedia.framework */; };
+		01000033 /* H265DecoderTestSupport.m in Sources */ = {isa = PBXBuildFile; fileRef = 02000032 /* H265DecoderTestSupport.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -70,6 +83,17 @@
 		02000025 /* lab28-h265-rejoin.bin */ = {isa = PBXFileReference; lastKnownFileType = file; path = "lab28-h265-rejoin.bin"; sourceTree = "<group>"; };
 		02000026 /* CodecSelectionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodecSelectionPolicy.swift; sourceTree = "<group>"; };
 		02000027 /* CodecSelectionPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodecSelectionPolicyTests.swift; sourceTree = "<group>"; };
+		02000028 /* H265NaluParser.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = H265NaluParser.h; sourceTree = "<group>"; };
+		02000029 /* H265NaluParser.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = H265NaluParser.m; sourceTree = "<group>"; };
+		0200002A /* RTCVideoDecoderH265.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RTCVideoDecoderH265.h; sourceTree = "<group>"; };
+		0200002B /* RTCVideoDecoderH265.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RTCVideoDecoderH265.m; sourceTree = "<group>"; };
+		0200002C /* OverlookVideoDecoderFactory.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = OverlookVideoDecoderFactory.h; sourceTree = "<group>"; };
+		0200002D /* OverlookVideoDecoderFactory.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = OverlookVideoDecoderFactory.m; sourceTree = "<group>"; };
+		0200002E /* OverlookTests-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "OverlookTests-Bridging-Header.h"; sourceTree = "<group>"; };
+		0200002F /* H265DecoderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = H265DecoderTests.swift; sourceTree = "<group>"; };
+		02000030 /* VideoToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = VideoToolbox.framework; path = System/Library/Frameworks/VideoToolbox.framework; sourceTree = SDKROOT; };
+		02000031 /* CoreMedia.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreMedia.framework; path = System/Library/Frameworks/CoreMedia.framework; sourceTree = SDKROOT; };
+		02000032 /* H265DecoderTestSupport.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = H265DecoderTestSupport.m; sourceTree = "<group>"; };
 		03000001 /* Overlook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Overlook.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		03000002 /* OverlookTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OverlookTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -80,6 +104,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				01000016 /* WebRTC in Frameworks */,
+				0100002F /* VideoToolbox.framework in Frameworks */,
+				01000030 /* CoreMedia.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -87,6 +113,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0100002E /* WebRTC in Frameworks */,
+				01000031 /* VideoToolbox.framework in Frameworks */,
+				01000032 /* CoreMedia.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -98,6 +127,7 @@
 			children = (
 				05000002 /* Overlook */,
 				05000004 /* OverlookTests */,
+				05000006 /* Frameworks */,
 				05000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -120,6 +150,12 @@
 				0200001D /* WebRTCAudioDevice.swift */,
 				02000021 /* WebRTCFactoryBuilder.m */,
 				02000020 /* WebRTCFactoryBuilder.h */,
+				02000029 /* H265NaluParser.m */,
+				02000028 /* H265NaluParser.h */,
+				0200002B /* RTCVideoDecoderH265.m */,
+				0200002A /* RTCVideoDecoderH265.h */,
+				0200002D /* OverlookVideoDecoderFactory.m */,
+				0200002C /* OverlookVideoDecoderFactory.h */,
 				0200001E /* RTCAudioDeviceShim.h */,
 				0200001F /* Overlook-Bridging-Header.h */,
 				02000007 /* InputManager.swift */,
@@ -149,6 +185,9 @@
 			children = (
 				02000022 /* OverlookTests.swift */,
 				02000027 /* CodecSelectionPolicyTests.swift */,
+				0200002F /* H265DecoderTests.swift */,
+				02000032 /* H265DecoderTestSupport.m */,
+				0200002E /* OverlookTests-Bridging-Header.h */,
 				05000005 /* Fixtures */,
 			);
 			path = OverlookTests;
@@ -162,6 +201,15 @@
 				02000025 /* lab28-h265-rejoin.bin */,
 			);
 			path = Fixtures;
+			sourceTree = "<group>";
+		};
+		05000006 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				02000031 /* CoreMedia.framework */,
+				02000030 /* VideoToolbox.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -201,6 +249,7 @@
 			);
 			name = OverlookTests;
 			packageProductDependencies = (
+				14000001 /* WebRTC */,
 			);
 			productName = OverlookTests;
 			productReference = 03000002 /* OverlookTests.xctest */;
@@ -287,6 +336,9 @@
 				0100001D /* CoreAudioDevices.swift in Sources */,
 				0100001E /* WebRTCAudioDevice.swift in Sources */,
 				0100001F /* WebRTCFactoryBuilder.m in Sources */,
+				01000027 /* H265NaluParser.m in Sources */,
+				01000029 /* RTCVideoDecoderH265.m in Sources */,
+				0100002B /* OverlookVideoDecoderFactory.m in Sources */,
 				01000007 /* InputManager.swift in Sources */,
 				01000008 /* OCRManager.swift in Sources */,
 				01000009 /* KVMDeviceManager.swift in Sources */,
@@ -304,6 +356,11 @@
 				01000020 /* OverlookTests.swift in Sources */,
 				01000025 /* CodecSelectionPolicy.swift in Sources */,
 				01000026 /* CodecSelectionPolicyTests.swift in Sources */,
+				01000028 /* H265NaluParser.m in Sources */,
+				0100002A /* RTCVideoDecoderH265.m in Sources */,
+				0100002C /* OverlookVideoDecoderFactory.m in Sources */,
+				0100002D /* H265DecoderTests.swift in Sources */,
+				01000033 /* H265DecoderTestSupport.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -513,6 +570,7 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.overlook.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_OBJC_BRIDGING_HEADER = "OverlookTests/OverlookTests-Bridging-Header.h";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 			};
@@ -529,6 +587,7 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.overlook.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_OBJC_BRIDGING_HEADER = "OverlookTests/OverlookTests-Bridging-Header.h";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 			};
