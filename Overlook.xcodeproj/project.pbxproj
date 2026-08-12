@@ -49,6 +49,9 @@
 		01000031 /* VideoToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 02000030 /* VideoToolbox.framework */; };
 		01000032 /* CoreMedia.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 02000031 /* CoreMedia.framework */; };
 		01000033 /* H265DecoderTestSupport.m in Sources */ = {isa = PBXBuildFile; fileRef = 02000032 /* H265DecoderTestSupport.m */; };
+		01000034 /* SDPOfferParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000033 /* SDPOfferParser.swift */; };
+		01000035 /* SDPOfferParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000033 /* SDPOfferParser.swift */; };
+		01000036 /* SDPOfferParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000034 /* SDPOfferParserTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -94,6 +97,8 @@
 		02000030 /* VideoToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = VideoToolbox.framework; path = System/Library/Frameworks/VideoToolbox.framework; sourceTree = SDKROOT; };
 		02000031 /* CoreMedia.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreMedia.framework; path = System/Library/Frameworks/CoreMedia.framework; sourceTree = SDKROOT; };
 		02000032 /* H265DecoderTestSupport.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = H265DecoderTestSupport.m; sourceTree = "<group>"; };
+		02000033 /* SDPOfferParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SDPOfferParser.swift; sourceTree = "<group>"; };
+		02000034 /* SDPOfferParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SDPOfferParserTests.swift; sourceTree = "<group>"; };
 		03000001 /* Overlook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Overlook.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		03000002 /* OverlookTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OverlookTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -137,6 +142,7 @@
 			children = (
 				02000001 /* OverlookApp.swift */,
 				02000026 /* CodecSelectionPolicy.swift */,
+				02000033 /* SDPOfferParser.swift */,
 				02000002 /* ContentView.swift */,
 				02000019 /* ContentControlBar.swift */,
 				0200001A /* VideoSurfaceView.swift */,
@@ -185,6 +191,7 @@
 			children = (
 				02000022 /* OverlookTests.swift */,
 				02000027 /* CodecSelectionPolicyTests.swift */,
+				02000034 /* SDPOfferParserTests.swift */,
 				0200002F /* H265DecoderTests.swift */,
 				02000032 /* H265DecoderTestSupport.m */,
 				0200002E /* OverlookTests-Bridging-Header.h */,
@@ -324,6 +331,7 @@
 			files = (
 				01000001 /* OverlookApp.swift in Sources */,
 				01000024 /* CodecSelectionPolicy.swift in Sources */,
+				01000034 /* SDPOfferParser.swift in Sources */,
 				01000002 /* ContentView.swift in Sources */,
 				0100001A /* ContentControlBar.swift in Sources */,
 				0100001B /* VideoSurfaceView.swift in Sources */,
@@ -355,6 +363,8 @@
 			files = (
 				01000020 /* OverlookTests.swift in Sources */,
 				01000025 /* CodecSelectionPolicy.swift in Sources */,
+				01000035 /* SDPOfferParser.swift in Sources */,
+				01000036 /* SDPOfferParserTests.swift in Sources */,
 				01000026 /* CodecSelectionPolicyTests.swift in Sources */,
 				01000028 /* H265NaluParser.m in Sources */,
 				0100002A /* RTCVideoDecoderH265.m in Sources */,

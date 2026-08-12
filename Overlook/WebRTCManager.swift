@@ -1,3 +1,4 @@
+// swiftlint:disable file_length type_body_length
 import Foundation
 #if canImport(CoreVideo)
 import CoreVideo
@@ -92,6 +93,7 @@ class WebRTCManager: NSObject, ObservableObject {
     @Published var isStreamStalled = false
     @Published var lastDisconnectReason: String?
     @Published var lastVideoFrameAgeSeconds: Int?
+    @Published var negotiatedCodec: NegotiatedCodec?
     
     private var peerConnection: RTCPeerConnection?
     private var audioPeerConnection: RTCPeerConnection?
@@ -105,6 +107,8 @@ class WebRTCManager: NSObject, ObservableObject {
     private var latencyMeasurementStart: Date?
 
     private var lastConnectedDevice: KVMDevice?
+    private var codecSelectionState: CodecSelectionState?
+    private var fallbackMemory: FallbackMemory = .none
 
     private let audioDevicesListenerQueue = DispatchQueue(label: "com.overlook.audio-device-change")
     private var audioDevicesListenerBlock: AudioObjectPropertyListenerBlock?
@@ -302,11 +306,37 @@ class WebRTCManager: NSObject, ObservableObject {
         Task { @MainActor [weak self] in
             guard let self else { return }
             defer { self.isAutoReconnectInProgress = false }
-            await self.reconnect(to: device)
+            await self.reconnect(
+                to: device,
+                codecPreference: .auto,
+                connectionKind: .automaticReconnect
+            )
         }
     }
     
-    func connect(to device: KVMDevice) async throws {
+    func connect(
+        to device: KVMDevice,
+        codecPreference: CodecPreference = .auto
+    ) async throws {
+        try await connect(
+            to: device,
+            codecPreference: codecPreference,
+            connectionKind: .operatorInitiatedConnect(.deviceSelection)
+        )
+    }
+
+    private func connect(
+        to device: KVMDevice,
+        codecPreference: CodecPreference,
+        connectionKind: ConnectionKind
+    ) async throws {
+        let initialCodecSelectionState = CodecSelectionPolicy.connect(
+            codecPreference: codecPreference,
+            connectionKind: connectionKind,
+            fallbackMemory: fallbackMemory
+        )
+        applyCodecSelectionState(initialCodecSelectionState)
+
         lastConnectedDevice = device
         setupWebRTC()
 
@@ -368,7 +398,10 @@ class WebRTCManager: NSObject, ObservableObject {
             setupDataChannel()
             
             // Connect to signaling server
-            try await connectToSignalingServer(device: device)
+            try await connectToSignalingServer(
+                device: device,
+                videoFormat: initialCodecSelectionState.videoFormatForWatchRequest
+            )
             
             // Start connection quality monitoring
             startLatencyMonitoring()
@@ -381,10 +414,29 @@ class WebRTCManager: NSObject, ObservableObject {
         }
     }
 
-    func reconnect(to device: KVMDevice) async {
+    func reconnect(
+        to device: KVMDevice,
+        codecPreference: CodecPreference = .auto
+    ) async {
+        await reconnect(
+            to: device,
+            codecPreference: codecPreference,
+            connectionKind: .operatorInitiatedConnect(.manualReconnect)
+        )
+    }
+
+    private func reconnect(
+        to device: KVMDevice,
+        codecPreference: CodecPreference,
+        connectionKind: ConnectionKind
+    ) async {
         disconnect()
         do {
-            try await connect(to: device)
+            try await connect(
+                to: device,
+                codecPreference: codecPreference,
+                connectionKind: connectionKind
+            )
         } catch {
             isConnecting = false
             lastDisconnectReason = "Reconnect failed: \(String(describing: error))"
@@ -399,6 +451,12 @@ class WebRTCManager: NSObject, ObservableObject {
         }
     }
     
+    private func applyCodecSelectionState(_ state: CodecSelectionState) {
+        codecSelectionState = state
+        fallbackMemory = state.fallbackMemory
+        negotiatedCodec = state.negotiatedCodec
+    }
+
     private func setupDataChannel() {
         guard let peerConnection = peerConnection else { return }
         
@@ -429,7 +487,10 @@ class WebRTCManager: NSObject, ObservableObject {
         }
     }
     
-    private func connectToSignalingServer(device: KVMDevice) async throws {
+    private func connectToSignalingServer(
+        device: KVMDevice,
+        videoFormat: VideoFormat
+    ) async throws {
         guard let rawURL = URL(string: device.webRTCURL) else {
             throw WebRTCError.invalidSignalingURL
         }
@@ -498,6 +559,7 @@ class WebRTCManager: NSObject, ObservableObject {
                     "video": true,
                     "mic": false,
                     "camera": false,
+                    "video_format": videoFormat.rawValue,
                 ],
             ],
             "transaction": watchTransaction,
@@ -742,6 +804,14 @@ class WebRTCManager: NSObject, ObservableObject {
         }
 
         guard let peerConnection, let handleId else { return }
+
+        if peerConnection === self.peerConnection, let codecSelectionState {
+            let nextState = CodecSelectionPolicy.handleOffer(
+                SDPOfferParser.parse(sdpString),
+                state: codecSelectionState
+            )
+            applyCodecSelectionState(nextState)
+        }
         
         let sessionDescription = RTCSessionDescription(
             type: .offer,
@@ -851,6 +921,8 @@ class WebRTCManager: NSObject, ObservableObject {
         }
     }
 
+    // Existing stats collection is intentionally kept as one pass over the WebRTC report.
+    // swiftlint:disable cyclomatic_complexity function_body_length identifier_name
     private func measureStreamStats() async {
         guard let peerConnection else {
             await MainActor.run {
@@ -1156,6 +1228,7 @@ class WebRTCManager: NSObject, ObservableObject {
             self.audioIceCurrentRoundTripTimeMs = audioRttMs
         }
     }
+    // swiftlint:enable cyclomatic_complexity function_body_length identifier_name
     
     private func measureLatency() async {
         latencyMeasurementStart = Date()
@@ -1226,6 +1299,8 @@ class WebRTCManager: NSObject, ObservableObject {
         connectedIceTime = nil
         latency = 0
         videoSize = nil
+        negotiatedCodec = nil
+        codecSelectionState = nil
         isFrameCaptureEnabled = false
         inboundVideoKbps = nil
         inboundFps = nil
@@ -1320,15 +1395,19 @@ extension WebRTCManager: @preconcurrency RTCPeerConnectionDelegate {
                 isConnecting = false
                 hasEverConnectedToStream = true
                 connectedIceTime = CACurrentMediaTime()
+                negotiatedCodec = codecSelectionState?.negotiatedCodec
                 lastDisconnectReason = nil
             } else {
                 if stateChanged == .disconnected {
+                    negotiatedCodec = nil
                     lastDisconnectReason = "Video connection lost"
                     isConnecting = false
                 } else if stateChanged == .failed {
+                    negotiatedCodec = nil
                     lastDisconnectReason = "Video connection failed"
                     isConnecting = false
                 } else if stateChanged == .closed {
+                    negotiatedCodec = nil
                     lastDisconnectReason = "Video connection closed"
                     isConnecting = false
                 }
