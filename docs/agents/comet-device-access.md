@@ -17,8 +17,12 @@ BDA still owns device-side state tracking and mirrors milestones to LAB-28.
 ## Codec / encoder state
 
 - `/etc/kvmd/user/config.json` → `"video_format"` (0=H264, 1=H265; restored to 1 on
-  2026-08-12). The web UI passes it into its Janus watch request; kvmd relaunches
-  ustreamer with `--venc-format=N` when a client's watch request differs.
+  2026-08-12). **A bare Janus watch request does NOT change the encoder** — its
+  `video_format` shapes only the SDP the plugin offers (`us_rtpv_make_sdp`, verified
+  2026-08-12). The encoder's real format follows kvmd: the config key at streamer start,
+  or an authenticated `POST /api/streamer/set_params?video_format=N` (kvmd restarts
+  ustreamer with `--venc-format=N` on param change — this is how the GL web UI switches
+  codec, via its kvmd API session in parallel with its watch request).
 - **`config.json` is VOLATILE** (BDA-confirmed 2026-08-12): GL clients can silently
   rewrite the file and DROP the `video_format` key entirely (prime suspect: the GL web
   UI/app persisting its own config model). Missing key → GL clients send H.264 in their

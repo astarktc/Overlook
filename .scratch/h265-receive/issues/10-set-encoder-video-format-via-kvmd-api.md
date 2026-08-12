@@ -21,6 +21,7 @@ streamer on param changes, exactly like the existing quality/fps switching.
 - [ ] Decide placement: KVMDeviceManager connect flow and/or WebRTCManager codec-selection actions (set_params BEFORE the video watch request so the offer and bits match)
 - [ ] Send `video_format` on: initial connect (per codec selection), codec-preference change, and H.264 fallback re-watch
 - [ ] Handle the encoder-restart window (~1-2 s stream gap after a format change; the watchdog must not misfire during it)
+- [ ] Writer-conflict + disconnect policy: once Overlook actively sets the encoder codec, Overlook and the GL web UI/Safari can fight over persisted encoder state (last writer wins; the web UI writes H.264 whenever its capability check fails, e.g. from Edge). Decide whether Overlook restores the device's prior `video_format` on disconnect or leaves-as-set — coordinate with BDA: the operator's standing-codec preference is tracked device-side as Plane LAB-29, to be synced with this ticket's behavior
 - [ ] Consider interplay with the parked `-999 cancelled` set_params issue (rapid successive calls)
 - [ ] Unit-test the policy wiring; live-verify H.265 end-to-end (tickets 04–08 checkboxes)
 - [ ] Leave device codec state as found or report changes (operator guardrail)
