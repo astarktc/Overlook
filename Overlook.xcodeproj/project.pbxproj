@@ -52,6 +52,7 @@
 		01000034 /* SDPOfferParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000033 /* SDPOfferParser.swift */; };
 		01000035 /* SDPOfferParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000033 /* SDPOfferParser.swift */; };
 		01000036 /* SDPOfferParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000034 /* SDPOfferParserTests.swift */; };
+		01000039 /* WebRTCBinaryH265SupportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000036 /* WebRTCBinaryH265SupportTests.swift */; };
 		01000037 /* CodecPreferenceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000035 /* CodecPreferenceStore.swift */; };
 		01000038 /* CodecPreferenceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000035 /* CodecPreferenceStore.swift */; };
 /* End PBXBuildFile section */
@@ -101,6 +102,7 @@
 		02000032 /* H265DecoderTestSupport.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = H265DecoderTestSupport.m; sourceTree = "<group>"; };
 		02000033 /* SDPOfferParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SDPOfferParser.swift; sourceTree = "<group>"; };
 		02000034 /* SDPOfferParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SDPOfferParserTests.swift; sourceTree = "<group>"; };
+		02000036 /* WebRTCBinaryH265SupportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCBinaryH265SupportTests.swift; sourceTree = "<group>"; };
 		02000035 /* CodecPreferenceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodecPreferenceStore.swift; sourceTree = "<group>"; };
 		03000001 /* Overlook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Overlook.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		03000002 /* OverlookTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OverlookTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -196,6 +198,7 @@
 				02000022 /* OverlookTests.swift */,
 				02000027 /* CodecSelectionPolicyTests.swift */,
 				02000034 /* SDPOfferParserTests.swift */,
+				02000036 /* WebRTCBinaryH265SupportTests.swift */,
 				0200002F /* H265DecoderTests.swift */,
 				02000032 /* H265DecoderTestSupport.m */,
 				0200002E /* OverlookTests-Bridging-Header.h */,
@@ -371,6 +374,7 @@
 				01000038 /* CodecPreferenceStore.swift in Sources */,
 				01000035 /* SDPOfferParser.swift in Sources */,
 				01000036 /* SDPOfferParserTests.swift in Sources */,
+				01000039 /* WebRTCBinaryH265SupportTests.swift in Sources */,
 				01000026 /* CodecSelectionPolicyTests.swift in Sources */,
 				01000028 /* H265NaluParser.m in Sources */,
 				0100002A /* RTCVideoDecoderH265.m in Sources */,
@@ -647,7 +651,7 @@
 			repositoryURL = "https://github.com/stasel/WebRTC";
 			requirement = {
 				kind = exactVersion;
-				version = 151.0.0;
+				version = 150.0.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
