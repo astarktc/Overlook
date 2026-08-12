@@ -385,12 +385,12 @@ class WebRTCManager: NSObject, ObservableObject {
     }
     
     private func cancelPendingICEAutomaticReconnect() {
-        iceAutomaticReconnectGeneration &+= 1
         iceAutomaticReconnectTask?.cancel()
         iceAutomaticReconnectTask = nil
     }
 
     private func beginOperatorInitiatedConnect(to device: KVMDevice) {
+        iceAutomaticReconnectGeneration &+= 1
         cancelPendingICEAutomaticReconnect()
         audioDeviceChangeDebounceTask?.cancel()
         audioDeviceChangeDebounceTask = nil
@@ -416,6 +416,7 @@ class WebRTCManager: NSObject, ObservableObject {
                 return
             }
             guard let self, self.iceAutomaticReconnectGeneration == generation else { return }
+            self.iceAutomaticReconnectTask = nil
             await self.performICEAutomaticReconnect(to: device, generation: generation)
         }
     }
@@ -444,13 +445,14 @@ class WebRTCManager: NSObject, ObservableObject {
 
         iceAutomaticReconnectAttempts += 1
         isAutoReconnectInProgress = true
+        defer { isAutoReconnectInProgress = false }
+
         let didStart = await reconnect(
             to: device,
             codecPreference: codecPreferenceStore.preference(forDeviceID: device.id),
             connectionKind: .automaticReconnect
         )
         guard iceAutomaticReconnectGeneration == generation else { return }
-        isAutoReconnectInProgress = false
 
         if shouldMaintainConnection == false {
             tearDownConnection()
@@ -492,6 +494,7 @@ class WebRTCManager: NSObject, ObservableObject {
         codecPreference: CodecPreference,
         connectionKind: ConnectionKind
     ) async throws -> Bool {
+        tearDownConnection()
         connectionGeneration &+= 1
         let generation = connectionGeneration
 
@@ -600,7 +603,6 @@ class WebRTCManager: NSObject, ObservableObject {
         connectionKind: ConnectionKind
     ) async -> Bool {
         guard shouldMaintainConnection else { return false }
-        tearDownConnection()
         do {
             return try await connect(
                 to: device,
@@ -1533,6 +1535,7 @@ class WebRTCManager: NSObject, ObservableObject {
         shouldMaintainConnection = false
         lastConnectedDevice = nil
         iceAutomaticReconnectAttempts = 0
+        iceAutomaticReconnectGeneration &+= 1
         cancelPendingICEAutomaticReconnect()
         audioDeviceChangeDebounceTask?.cancel()
         audioDeviceChangeDebounceTask = nil
@@ -1557,7 +1560,7 @@ class WebRTCManager: NSObject, ObservableObject {
         let waiters = janusWaiters
         janusWaiters.removeAll()
         for (_, waiter) in waiters {
-            waiter.resume(throwing: WebRTCError.signalingConnectionLost)
+            waiter.resume(throwing: CancellationError())
         }
         
         webSocketTask?.cancel()
@@ -1772,20 +1775,22 @@ extension WebRTCManager: @preconcurrency RTCPeerConnectionDelegate {
     }
 
     func peerConnection(_ peerConnection: RTCPeerConnection, didAdd rtpReceiver: RTCRtpReceiver, streams: [RTCMediaStream]) {
-        guard peerConnection === self.peerConnection else { return }
-        applyPlayoutDelayHintIfPossible()
-        guard let track = rtpReceiver.track as? RTCVideoTrack else { return }
+        Task { @MainActor in
+            guard peerConnection === self.peerConnection else { return }
+            applyPlayoutDelayHintIfPossible()
+            guard let track = rtpReceiver.track as? RTCVideoTrack else { return }
 
-        let renderer = ConnectionGenerationVideoRenderer(
-            manager: self,
-            generation: connectionGeneration
-        )
-        videoTrack = track
-        videoRenderer = renderer
-        if let videoView {
-            track.add(videoView)
+            let renderer = ConnectionGenerationVideoRenderer(
+                manager: self,
+                generation: connectionGeneration
+            )
+            videoTrack = track
+            videoRenderer = renderer
+            if let videoView {
+                track.add(videoView)
+            }
+            track.add(renderer)
         }
-        track.add(renderer)
     }
 }
 
