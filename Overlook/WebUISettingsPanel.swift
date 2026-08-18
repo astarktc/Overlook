@@ -208,6 +208,8 @@ struct WebUISettingsPanel: View {
     }
 
     var body: some View {
+        // [DEBUG-swiftui-audit]
+        let _ = DiagFlags.printChanges ? Self._printChanges() : ()
         VStack(spacing: 0) {
             HStack(spacing: 10) {
                 Text("Settings")

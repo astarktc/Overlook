@@ -20,6 +20,8 @@ struct StatusBarView: View {
     }
 
     var body: some View {
+        // [DEBUG-swiftui-audit]
+        let _ = DiagFlags.printChanges ? Self._printChanges() : ()
         HStack {
             Text(deviceName)
                 .font(.caption)

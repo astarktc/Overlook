@@ -41,3 +41,4 @@ docs/conversation-logs/
 .pi-lens/
 __pycache__/
 *.profraw
+build/

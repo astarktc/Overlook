@@ -24,14 +24,16 @@ struct VideoSurfaceView: View {
 
     private var ocrSelectionRect: CGRect? {
         guard let start = ocrDragStart, let current = ocrDragCurrent else { return nil }
-        let x = min(start.x, current.x)
-        let y = min(start.y, current.y)
+        let originX = min(start.x, current.x)
+        let originY = min(start.y, current.y)
         let width = abs(start.x - current.x)
         let height = abs(start.y - current.y)
-        return CGRect(x: x, y: y, width: width, height: height)
+        return CGRect(x: originX, y: originY, width: width, height: height)
     }
 
     var body: some View {
+        // [DEBUG-swiftui-audit]
+        let _ = DiagFlags.printChanges ? Self._printChanges() : ()
         GeometryReader { geometry in
             ZStack {
                 Color.black
@@ -354,45 +356,45 @@ final class TrackingContainerView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         super.mouseDown(with: event)
-        let p = convert(event.locationInWindow, from: nil)
-        let flipped = CGPoint(x: p.x, y: bounds.height - p.y)
+        let point = convert(event.locationInWindow, from: nil)
+        let flipped = CGPoint(x: point.x, y: bounds.height - point.y)
         onMouseButton?(.left, true, flipped)
     }
 
     override func mouseUp(with event: NSEvent) {
         super.mouseUp(with: event)
-        let p = convert(event.locationInWindow, from: nil)
-        let flipped = CGPoint(x: p.x, y: bounds.height - p.y)
+        let point = convert(event.locationInWindow, from: nil)
+        let flipped = CGPoint(x: point.x, y: bounds.height - point.y)
         onMouseButton?(.left, false, flipped)
     }
 
     override func rightMouseDown(with event: NSEvent) {
         super.rightMouseDown(with: event)
-        let p = convert(event.locationInWindow, from: nil)
-        let flipped = CGPoint(x: p.x, y: bounds.height - p.y)
+        let point = convert(event.locationInWindow, from: nil)
+        let flipped = CGPoint(x: point.x, y: bounds.height - point.y)
         onMouseButton?(.right, true, flipped)
     }
 
     override func rightMouseUp(with event: NSEvent) {
         super.rightMouseUp(with: event)
-        let p = convert(event.locationInWindow, from: nil)
-        let flipped = CGPoint(x: p.x, y: bounds.height - p.y)
+        let point = convert(event.locationInWindow, from: nil)
+        let flipped = CGPoint(x: point.x, y: bounds.height - point.y)
         onMouseButton?(.right, false, flipped)
     }
 
     override func otherMouseDown(with event: NSEvent) {
         super.otherMouseDown(with: event)
         guard event.buttonNumber == 2 else { return }
-        let p = convert(event.locationInWindow, from: nil)
-        let flipped = CGPoint(x: p.x, y: bounds.height - p.y)
+        let point = convert(event.locationInWindow, from: nil)
+        let flipped = CGPoint(x: point.x, y: bounds.height - point.y)
         onMouseButton?(.middle, true, flipped)
     }
 
     override func otherMouseUp(with event: NSEvent) {
         super.otherMouseUp(with: event)
         guard event.buttonNumber == 2 else { return }
-        let p = convert(event.locationInWindow, from: nil)
-        let flipped = CGPoint(x: p.x, y: bounds.height - p.y)
+        let point = convert(event.locationInWindow, from: nil)
+        let flipped = CGPoint(x: point.x, y: bounds.height - point.y)
         onMouseButton?(.middle, false, flipped)
     }
 
@@ -412,8 +414,8 @@ final class TrackingContainerView: NSView {
     }
 
     private func emitMouseMove(with event: NSEvent) {
-        let p = convert(event.locationInWindow, from: nil)
-        let flipped = CGPoint(x: p.x, y: bounds.height - p.y)
+        let point = convert(event.locationInWindow, from: nil)
+        let flipped = CGPoint(x: point.x, y: bounds.height - point.y)
         let delta = CGSize(width: event.deltaX, height: -event.deltaY)
         onMouseMove?(flipped, delta)
     }
