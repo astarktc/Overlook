@@ -542,6 +542,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Overlook/Info.plist;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Overlook needs microphone access to send audio to the remote device.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -577,6 +578,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Overlook/Info.plist;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Overlook needs microphone access to send audio to the remote device.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
