@@ -71,8 +71,24 @@ BDA still owns device-side state tracking and mirrors milestones to LAB-28.
 - CBR validated 2026-08-19: static screen holds ~17 Mbps (QP-floor-limited — kernel rc_model
   fqp floors ≈ 16–18 are the firmware's quality ceiling; no exposed knob). Targets above ~25
   Mbps only add motion headroom.
-- Firmware note: device runs 1.9.0; 1.9.1 (~2026-05-15) fixes "corruption at max bitrate with
-  WebRTC FEC". An upgrade wipes `/tmp` flags and may re-flash the stock EDID — recheck both.
+- **Persistence (deployed 2026-08-19):** `/etc/init.d/S97vencquality` (copy in repo:
+  `.scratch/comet-quality/`) — at boot touches `/tmp/cbr`, sets `/tmp/bitrate` to 40 Mbps
+  (window 10–50M), and runs a 5 s guard loop that bounces Overlook's per-connect 20 Mbps pin
+  back to 40. Guard verified live. A firmware upgrade wipes it — re-deploy from the repo copy.
+- Firmware version gotcha: the web UI reads `/etc/version` ("V1.9.1 release1" — correct),
+  while `/etc/os-release` shows the git-describe `rm10-1.9.0-release1-5-g…` (5 commits after
+  the 1.9.0 tag = the 1.9.1 build). Device is on **1.9.1 release1** (latest as of 2026-08-19),
+  which includes the max-bitrate WebRTC-FEC corruption fix. On the next upgrade: `/tmp` flags
+  and `S97vencquality` are wiped and the stock EDID may return — recheck all three.
+
+## HiDPI on the target Mac (2026-08-19)
+
+The work Mac (`ssh mac-uni-auto`, macOS 26.6.1) uses a `scale-resolutions` override plist for
+the Comet's display identity (ViewSonic vendor `5a63` / product `2f34`) at
+`/Library/Displays/Contents/Resources/Overrides/DisplayVendorID-5a63/DisplayProductID-2f34`
+— installer + EDID backup in `.scratch/comet-quality/`. Wire stays 2560×1440@60; macOS renders
+a 2× framebuffer (supersampling). If the Comet's EDID identity ever changes, the override path
+must change with it.
 
 ## Guardrails (production device — it drives the operator's work Mac)
 

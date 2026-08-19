@@ -65,7 +65,7 @@ Rate-control modes CBR/VBR/AVBR/FIXQP(+QPMAP/CVBR on RV1126B). CBR: target decis
 - `/tmp/cbr` + kvmd restart → `enRcMode: 8` (H.265-CBR) confirmed in log.
 - Static screen: **~17 Mbps sustained** (vs ~5 Mbps VBR floor before) — QP-floor-limited, i.e. maximum static quality this firmware can produce. User-confirmed visible text improvement.
 - Live retarget via `/tmp/bitrate`: 25 Mbps ("min 6250 max 31250") and 40 Mbps ("min 10000 max 50000") both accepted without restart. Wire rate on static/video content stayed ≤ ~17 Mbps — above ~20–25 Mbps the encoder is QP-floor-bound, so extra target is motion headroom only.
-- Caveat: firmware 1.9.0 predates the 1.9.1 fix for "screen corruption at maximum bitrate with WebRTC FEC" (1.9.1 shipped ~2026-05-15). No corruption observed during the probes.
+- Firmware correction (2026-08-19): the device was on 1.9.1 release1 all along (os-release shows the git-describe of the 1.9.0 tag + 5 commits; the web UI's /etc/version is authoritative) — the FEC corruption fix was already present, consistent with the artifact-free probes.
 - Overlook re-pins `h264_bitrate=20000` through the kvmd API on every connect, which rewrites `/tmp/bitrate` to 20000000 — any higher target must be reapplied after connect (or the kvmd clamp raised in `override.yaml`, or Overlook taught to pin higher).
 
 ### Loose ends

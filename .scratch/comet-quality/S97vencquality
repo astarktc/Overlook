@@ -1,0 +1,40 @@
+#!/bin/sh
+# S97vencquality — Comet encoder quality persistence (Overlook project, 2026-08-19).
+# Deployed to /etc/init.d/ on the Comet (runs before S98kvmd at boot).
+#
+# 1. Forces CBR rate control (flag file read by the GL ustreamer fork at VENC init).
+# 2. Runs a guard loop: whenever a client (Overlook pins h264_bitrate=20000 via the
+#    kvmd API on every connect) rewrites /tmp/bitrate to 20000000, bump it back to
+#    TARGET. ustreamer inotify-watches the file and applies changes live
+#    (window: min 0.25x / max 1.25x of target -> 40M gives 10M..50M, CBR holds ~40M
+#    when content demands; static screens are QP-floor-limited ~17M regardless).
+#
+# NOTE: a firmware upgrade wipes this script — re-deploy after upgrading.
+# Remove: rm /etc/init.d/S97vencquality /tmp/cbr; kill the guard; restart kvmd.
+TARGET=40000000
+PIN=20000000
+
+start() {
+    touch /tmp/cbr
+    echo $TARGET > /tmp/bitrate
+    (
+        while true; do
+            v=$(cat /tmp/bitrate 2>/dev/null)
+            [ "$v" = "$PIN" ] && echo $TARGET > /tmp/bitrate
+            sleep 5
+        done
+    ) &
+    echo $! > /var/run/vencquality.pid
+}
+
+stop() {
+    [ -f /var/run/vencquality.pid ] && kill "$(cat /var/run/vencquality.pid)" 2>/dev/null
+    rm -f /var/run/vencquality.pid /tmp/cbr
+}
+
+case "$1" in
+    start) start ;;
+    stop) stop ;;
+    restart) stop; start ;;
+    *) echo "Usage: $0 {start|stop|restart}" ;;
+esac
