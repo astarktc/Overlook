@@ -46,6 +46,34 @@ BDA still owns device-side state tracking and mirrors milestones to LAB-28.
 - Janus: `/etc/kvmd/janus/*.jcfg`; plugin `/usr/lib/ustreamer/janus/libjanus_ustreamer.so`;
   WS at `/run/kvmd/janus-ws.sock` (nginx proxies `wss://<host>/janus/ws`).
 
+## EDID (added 2026-08-19, see docs/research/2026-08-18-comet-hidpi-4k60-bitrate.md)
+
+- EDID lives **in the LT6911C chip's flash**, not the filesystem. Apply at runtime via
+  `POST /api/upgrade/edid` (hex string, exactly 128 or 256 bytes; 128-byte blobs get a canned
+  CEA extension auto-appended; **no checksum validation** — don't flash garbage). Saved copy:
+  `/etc/kvmd/user/edid.txt`; read back via `GET /api/upgrade/get_edid`. Applying resets the
+  chip → the target Mac re-does display detection immediately.
+- Current EDID (as of 2026-08-19): ViewSonic VX2478-2 identity, 2560×1440@60 preferred, no 4K
+  modes, 300 MHz cap. Persists across reboots (chip flash); the boot script only re-flashes
+  stock on first boot (`/etc/kvmd/user/edid_updated` guard).
+- **4K60 is hardware-impossible** (LT6911C = HDMI 1.4). Do not chase it.
+
+## Encoder rate control (added 2026-08-19, disassembly-derived)
+
+- Default RC mode is **VBR** with min hardcoded to 0.25× target (→ static screens sag to ~5
+  Mbps at the 20 Mbps target). **Flag files** read at VENC init (need a streamer restart, e.g.
+  `/etc/init.d/S98kvmd restart`): `/tmp/cbr` / `/tmp/vbr` / `/tmp/avbr` force the RC mode.
+  `/tmp` is volatile — flags vanish on device reboot.
+- **`/tmp/bitrate`** (raw bps) is inotify-watched and applied live, no restart; window is
+  0.25×/1.25× of the written value; `0` = REMB auto. It is NOT clamped — kvmd's API clamps at
+  20000 kbps, direct writes don't. Overlook re-pins 20000 via the API on every connect,
+  overwriting this file.
+- CBR validated 2026-08-19: static screen holds ~17 Mbps (QP-floor-limited — kernel rc_model
+  fqp floors ≈ 16–18 are the firmware's quality ceiling; no exposed knob). Targets above ~25
+  Mbps only add motion headroom.
+- Firmware note: device runs 1.9.0; 1.9.1 (~2026-05-15) fixes "corruption at max bitrate with
+  WebRTC FEC". An upgrade wipes `/tmp` flags and may re-flash the stock EDID — recheck both.
+
 ## Guardrails (production device — it drives the operator's work Mac)
 
 - Fine: reads, logs, sink dumps, codec flips via `config.json`, kvmd restarts (~15 s).
