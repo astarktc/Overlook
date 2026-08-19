@@ -33,6 +33,12 @@ struct ContentView: View {
     @State private var showingConnections = false
     @State private var didAutoOpenConnections = false
 
+    /// Ticket 03: the settings panel is unmounted while closed, so its survivable state (loaded
+    /// config, keymaps, streamer state, section expansion, drafts) is owned here instead.
+    /// `ConnectionsPopoverView` needs no equivalent: its device list comes from
+    /// `KVMDeviceManager` and its selection is already a `ContentView` binding.
+    @StateObject private var settingsPanelModel = WebUISettingsPanelModel()
+
     @State private var pausedCaptureKeyboardWasEnabled: Bool?
     @State private var pausedCaptureMouseWasEnabled: Bool?
     @State private var isInputCapturePausedForUI: Bool = false
@@ -211,47 +217,52 @@ struct ContentView: View {
                     }
             }
 
-            WebUISettingsPanel(isPresented: $showingSettings)
-                .frame(width: 360)
-                .offset(x: showingSettings ? 0 : 360)
-                .animation(Animation.easeInOut(duration: 0.2), value: showingSettings)
-                .allowsHitTesting(showingSettings)
-
-            VStack(spacing: 0) {
-                ConnectionsPopoverView(
-                    selectedDevice: $selectedDevice,
-                    isConnected: isConnected,
-                    isScanning: kvmDeviceManager.isScanning,
-                    devices: kvmDeviceManager.availableDevices,
-                    connectedDeviceName: kvmDeviceManager.connectedDevice?.name,
-                    videoSize: webRTCManager.videoSize,
-                    onScan: {
-                        kvmDeviceManager.scanForDevices()
-                    },
-                    onManualConnect: {
-                        showingManualConnect = true
-                    },
-                    onToggleConnection: {
-                        toggleConnection()
-                    },
-                    onForgetSelectedDevice: {
-                        guard let device = selectedDevice else { return }
-                        guard device.id.hasPrefix("saved-") else { return }
-                        kvmDeviceManager.forgetDevice(device)
-                        selectedDevice = nil
-                    }
-                )
-                .frame(width: 360)
-                .background(.ultraThinMaterial)
-                .padding(.top, 8)
-
-                Spacer(minLength: 0)
+            if showingSettings {
+                WebUISettingsPanel(isPresented: $showingSettings, model: settingsPanelModel)
+                    .frame(width: 360)
+                    .transition(.move(edge: .trailing))
             }
-            .frame(maxHeight: .infinity)
-            .offset(x: showingConnections ? 0 : 360)
-            .animation(.easeInOut(duration: 0.2), value: showingConnections)
-            .allowsHitTesting(showingConnections)
+
+            if showingConnections {
+                VStack(spacing: 0) {
+                    ConnectionsPopoverView(
+                        selectedDevice: $selectedDevice,
+                        isConnected: isConnected,
+                        isScanning: kvmDeviceManager.isScanning,
+                        devices: kvmDeviceManager.availableDevices,
+                        connectedDeviceName: kvmDeviceManager.connectedDevice?.name,
+                        videoSize: webRTCManager.videoSize,
+                        onScan: {
+                            kvmDeviceManager.scanForDevices()
+                        },
+                        onManualConnect: {
+                            showingManualConnect = true
+                        },
+                        onToggleConnection: {
+                            toggleConnection()
+                        },
+                        onForgetSelectedDevice: {
+                            guard let device = selectedDevice else { return }
+                            guard device.id.hasPrefix("saved-") else { return }
+                            kvmDeviceManager.forgetDevice(device)
+                            selectedDevice = nil
+                        }
+                    )
+                    .frame(width: 360)
+                    .background(.ultraThinMaterial)
+                    .padding(.top, 8)
+
+                    Spacer(minLength: 0)
+                }
+                .frame(maxHeight: .infinity)
+                .transition(.move(edge: .trailing))
+            }
         }
+        // Ticket 03: both panels are conditionally mounted, so the slide-in/out is driven by these
+        // container-level animations plus each panel's `.transition(.move(edge: .trailing))`.
+        // This also covers the call sites that flip the flags without `withAnimation`.
+        .animation(.easeInOut(duration: 0.2), value: showingSettings)
+        .animation(.easeInOut(duration: 0.2), value: showingConnections)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             StatusBarView(
                 deviceName: kvmDeviceManager.connectedDevice?.name ?? selectedDevice?.name ?? "No Device",

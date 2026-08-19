@@ -15,64 +15,19 @@ struct WebUISettingsPanel: View {
     @AppStorage("overlook.audio.inputDeviceUID") private var audioInputDeviceUID: String = ""
     @AppStorage("overlook.audio.outputDeviceUID") private var audioOutputDeviceUID: String = ""
 
-    @State private var config: GLKVMSystemConfig?
-    @State private var keymaps: GLKVMHidKeymapsState?
-    @State private var streamerState: GLKVMStreamerState?
-    @State private var isLoading = false
-    @State private var isApplying = false
-    @State private var isApplyingStreamer = false
-    @State private var isApplyingEdid = false
-    @State private var errorMessage: String?
+    /// Survivable panel state, owned by `ContentView`. Ticket 03: the panel is unmounted while
+    /// closed, so anything that must persist across a close lives in the model, not in `@State`.
+    @ObservedObject var model: WebUISettingsPanelModel
 
-    private struct ErrorEntry: Identifiable, Hashable {
-        let id = UUID()
-        let date: Date
-        let message: String
-    }
+    private typealias ErrorEntry = WebUISettingsPanelModel.ErrorEntry
 
-    @State private var errorHistory: [ErrorEntry] = []
-    @State private var showingErrorHistory: Bool = false
-
-    @State private var isVideoExpanded = true
-    @State private var isRemoteExpanded = true
-    @State private var isKeyboardExpanded = true
-    @State private var isAudioExpanded = false
-    @State private var isSystemExpanded = false
-    @State private var isNetworkExpanded = false
-    @State private var isAdvancedExpanded = false
-
-    @State private var currentEdid: String = ""
-    @State private var selectedEdidOption: String = "CUSTOMIZE"
-    @State private var customEdidDraft: String = ""
-    @State private var isProgrammaticEdidSelectionUpdate: Bool = false
-
-    @State private var selectedVideoQualityPreset: Int = 1
-    @State private var codecPreference: CodecPreference = .auto
-
-    @State private var applyTask: Task<Void, Never>?
-    @State private var applyStreamerTask: Task<Void, Never>?
-
-    @State private var isProgrammaticStreamerDraftUpdate: Bool = false
-
-    @State private var streamerDesiredFps: Int = 30
-    @State private var streamerQuality: Int = 80
-    @State private var streamerH264Bitrate: Int = 2000
-    @State private var streamerH264Gop: Int = 30
-    @State private var streamerZeroDelay: Bool = false
-    @State private var streamerResolution: String = ""
-
-    @State private var audioInputDevices: [CoreAudioDeviceInfo] = []
-    @State private var audioOutputDevices: [CoreAudioDeviceInfo] = []
-
-    @State private var streamerDesiredFpsText: String = ""
-    @State private var streamerQualityText: String = ""
-    @State private var streamerH264BitrateText: String = ""
-    @State private var streamerH264GopText: String = ""
-
-    private var streamerFeatures: GLKVMStreamerState.Features? { streamerState?.features }
-    private var streamerLimits: GLKVMStreamerState.Limits? { streamerState?.limits }
+    private var streamerFeatures: GLKVMStreamerState.Features? { model.streamerState?.features }
+    private var streamerLimits: GLKVMStreamerState.Limits? { model.streamerState?.limits }
+    /// Reload trigger: the panel only exists while open (ticket 03), so the connected device is
+    /// the only thing that needs to re-drive `load()` for a mounted panel. Mounting itself runs
+    /// `.task` once, which keeps the previous load-on-open behaviour.
     private var settingsLoadID: String {
-        "\(isPresented)|\(kvmDeviceManager.connectedDevice?.id ?? "none")"
+        kvmDeviceManager.connectedDevice?.id ?? "none"
     }
 
     private enum StreamerField: Hashable {
@@ -215,11 +170,11 @@ struct WebUISettingsPanel: View {
                 Text("Settings")
                     .font(.headline)
                 Spacer()
-                if isLoading || isApplying || isApplyingEdid {
+                if model.isLoading || model.isApplying || model.isApplyingEdid {
                     ProgressView()
                         .controlSize(.small)
                 }
-                if isApplyingStreamer {
+                if model.isApplyingStreamer {
                     ProgressView()
                         .controlSize(.small)
                 }
@@ -234,7 +189,7 @@ struct WebUISettingsPanel: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    DisclosureGroup("Video", isExpanded: $isVideoExpanded) {
+                    DisclosureGroup("Video", isExpanded: $model.isVideoExpanded) {
                         VStack(alignment: .leading, spacing: 10) {
                             let modeBinding = bindingString(
                                 get: { $0.videoProcessing },
@@ -258,7 +213,7 @@ struct WebUISettingsPanel: View {
                             .pickerStyle(.segmented)
                             .disabled(kvmDeviceManager.connectedDevice == nil)
 
-                            Picker("Quality", selection: $selectedVideoQualityPreset) {
+                            Picker("Quality", selection: $model.selectedVideoQualityPreset) {
                                 Text("Low").tag(0)
                                 Text("Medium").tag(1)
                                 Text("High").tag(2)
@@ -266,43 +221,43 @@ struct WebUISettingsPanel: View {
                                 Text("Insane").tag(videoQualityInsaneTag)
                                 Text("Custom").tag(videoQualityCustomTag)
                             }
-                            .disabled(kvmDeviceManager.glkvmClient == nil || isLoading || isApplying || isApplyingStreamer || isApplyingEdid)
-                            .onChange(of: selectedVideoQualityPreset) { _, newValue in
-                                guard isLoading == false else { return }
+                            .disabled(kvmDeviceManager.glkvmClient == nil || model.isLoading || model.isApplying || model.isApplyingStreamer || model.isApplyingEdid)
+                            .onChange(of: model.selectedVideoQualityPreset) { _, newValue in
+                                guard model.isLoading == false else { return }
                                 Task { await applyVideoQualityPreset(newValue) }
                             }
 
-                            Picker("EDID", selection: $selectedEdidOption) {
+                            Picker("EDID", selection: $model.selectedEdidOption) {
                                 ForEach(edidOptions, id: \.id) { opt in
                                     Text(opt.label).tag(opt.id)
                                 }
                             }
-                            .disabled(kvmDeviceManager.glkvmClient == nil || isLoading || isApplyingEdid)
-                            .onChange(of: selectedEdidOption) { _, newValue in
-                                guard isProgrammaticEdidSelectionUpdate == false else { return }
+                            .disabled(kvmDeviceManager.glkvmClient == nil || model.isLoading || model.isApplyingEdid)
+                            .onChange(of: model.selectedEdidOption) { _, newValue in
+                                guard model.isProgrammaticEdidSelectionUpdate == false else { return }
                                 guard newValue != "CUSTOMIZE" else { return }
                                 guard let opt = edidOptions.first(where: { $0.id == newValue }), let edid = resolvedEdid(for: opt) else { return }
                                 Task { await applyEdid(edid) }
                             }
 
-                            if selectedEdidOption == "CUSTOMIZE" {
-                                TextEditor(text: $customEdidDraft)
+                            if model.selectedEdidOption == "CUSTOMIZE" {
+                                TextEditor(text: $model.customEdidDraft)
                                     .font(.body)
                                     .frame(minHeight: 90, maxHeight: 160)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 6)
                                             .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
                                     )
-                                    .disabled(kvmDeviceManager.glkvmClient == nil || isApplyingEdid)
+                                    .disabled(kvmDeviceManager.glkvmClient == nil || model.isApplyingEdid)
 
                                 HStack {
                                     Button("Apply custom EDID") {
-                                        Task { await applyEdid(customEdidDraft) }
+                                        Task { await applyEdid(model.customEdidDraft) }
                                     }
                                     .disabled(
                                         kvmDeviceManager.glkvmClient == nil ||
-                                            isApplyingEdid ||
-                                            customEdidDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                            model.isApplyingEdid ||
+                                            model.customEdidDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                                     )
 
                                     Spacer()
@@ -326,7 +281,7 @@ struct WebUISettingsPanel: View {
                                 defaultValue: true
                             ))
 
-                            if selectedVideoQualityPreset == videoQualityCustomTag {
+                            if model.selectedVideoQualityPreset == videoQualityCustomTag {
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text("Streamer")
                                         .font(.subheadline)
@@ -334,7 +289,7 @@ struct WebUISettingsPanel: View {
                                     HStack {
                                         Text("FPS")
                                         Spacer()
-                                        TextField("", text: $streamerDesiredFpsText)
+                                        TextField("", text: $model.streamerDesiredFpsText)
                                             .frame(width: 70)
                                             .textFieldStyle(.roundedBorder)
                                             .multilineTextAlignment(.trailing)
@@ -344,23 +299,23 @@ struct WebUISettingsPanel: View {
                                             }
                                         Stepper(
                                             "",
-                                            value: $streamerDesiredFps,
+                                            value: $model.streamerDesiredFps,
                                             in: (streamerLimits?.desiredFps.min ?? 1)...(streamerLimits?.desiredFps.max ?? 60)
                                         )
                                         .labelsHidden()
                                         .disabled(focusedStreamerField == .fps)
                                     }
-                                    .disabled(streamerState == nil)
-                                    .onChange(of: streamerDesiredFps) { _, _ in
-                                        guard isProgrammaticStreamerDraftUpdate == false else { return }
-                                        streamerDesiredFpsText = String(streamerDesiredFps)
+                                    .disabled(model.streamerState == nil)
+                                    .onChange(of: model.streamerDesiredFps) { _, _ in
+                                        guard model.isProgrammaticStreamerDraftUpdate == false else { return }
+                                        model.streamerDesiredFpsText = String(model.streamerDesiredFps)
                                         scheduleStreamerApply()
                                     }
 
                                     HStack {
                                         Text("Quality")
                                         Spacer()
-                                        TextField("", text: $streamerQualityText)
+                                        TextField("", text: $model.streamerQualityText)
                                             .frame(width: 70)
                                             .textFieldStyle(.roundedBorder)
                                             .multilineTextAlignment(.trailing)
@@ -368,21 +323,21 @@ struct WebUISettingsPanel: View {
                                             .onSubmit {
                                                 focusedStreamerField = nil
                                             }
-                                        Stepper("", value: $streamerQuality, in: 0...100)
+                                        Stepper("", value: $model.streamerQuality, in: 0...100)
                                             .labelsHidden()
                                             .disabled(focusedStreamerField == .quality)
                                     }
-                                    .disabled(streamerState == nil || streamerFeatures?.quality == false)
-                                    .onChange(of: streamerQuality) { _, _ in
-                                        guard isProgrammaticStreamerDraftUpdate == false else { return }
-                                        streamerQualityText = String(streamerQuality)
+                                    .disabled(model.streamerState == nil || streamerFeatures?.quality == false)
+                                    .onChange(of: model.streamerQuality) { _, _ in
+                                        guard model.isProgrammaticStreamerDraftUpdate == false else { return }
+                                        model.streamerQualityText = String(model.streamerQuality)
                                         scheduleStreamerApply()
                                     }
 
                                 HStack {
                                     Text("Bitrate")
                                     Spacer()
-                                    TextField("", text: $streamerH264BitrateText)
+                                    TextField("", text: $model.streamerH264BitrateText)
                                         .frame(width: 90)
                                         .textFieldStyle(.roundedBorder)
                                         .multilineTextAlignment(.trailing)
@@ -392,23 +347,23 @@ struct WebUISettingsPanel: View {
                                         }
                                     Stepper(
                                         "",
-                                        value: $streamerH264Bitrate,
+                                        value: $model.streamerH264Bitrate,
                                         in: (streamerLimits?.h264Bitrate.min ?? 100)...(streamerLimits?.h264Bitrate.max ?? 20000)
                                     )
                                     .labelsHidden()
                                     .disabled(focusedStreamerField == .bitrate)
                                 }
-                                .disabled(streamerState == nil || streamerFeatures?.h264 == false)
-                                .onChange(of: streamerH264Bitrate) { _, _ in
-                                    guard isProgrammaticStreamerDraftUpdate == false else { return }
-                                    streamerH264BitrateText = String(streamerH264Bitrate)
+                                .disabled(model.streamerState == nil || streamerFeatures?.h264 == false)
+                                .onChange(of: model.streamerH264Bitrate) { _, _ in
+                                    guard model.isProgrammaticStreamerDraftUpdate == false else { return }
+                                    model.streamerH264BitrateText = String(model.streamerH264Bitrate)
                                     scheduleStreamerApply()
                                 }
 
                                 HStack {
                                     Text("GOP")
                                     Spacer()
-                                    TextField("", text: $streamerH264GopText)
+                                    TextField("", text: $model.streamerH264GopText)
                                         .frame(width: 70)
                                         .textFieldStyle(.roundedBorder)
                                         .multilineTextAlignment(.trailing)
@@ -418,23 +373,23 @@ struct WebUISettingsPanel: View {
                                         }
                                     Stepper(
                                         "",
-                                        value: $streamerH264Gop,
+                                        value: $model.streamerH264Gop,
                                         in: (streamerLimits?.h264Gop.min ?? 1)...(streamerLimits?.h264Gop.max ?? 300)
                                     )
                                     .labelsHidden()
                                     .disabled(focusedStreamerField == .gop)
                                 }
-                                .disabled(streamerState == nil || streamerFeatures?.h264 == false)
-                                .onChange(of: streamerH264Gop) { _, _ in
-                                    guard isProgrammaticStreamerDraftUpdate == false else { return }
-                                    streamerH264GopText = String(streamerH264Gop)
+                                .disabled(model.streamerState == nil || streamerFeatures?.h264 == false)
+                                .onChange(of: model.streamerH264Gop) { _, _ in
+                                    guard model.isProgrammaticStreamerDraftUpdate == false else { return }
+                                    model.streamerH264GopText = String(model.streamerH264Gop)
                                     scheduleStreamerApply()
                                 }
 
-                                    Toggle("Zero delay", isOn: $streamerZeroDelay)
-                                        .disabled(streamerState == nil || streamerFeatures?.zeroDelay == false)
-                                        .onChange(of: streamerZeroDelay) { _, _ in
-                                            guard isProgrammaticStreamerDraftUpdate == false else { return }
+                                    Toggle("Zero delay", isOn: $model.streamerZeroDelay)
+                                        .disabled(model.streamerState == nil || streamerFeatures?.zeroDelay == false)
+                                        .onChange(of: model.streamerZeroDelay) { _, _ in
+                                            guard model.isProgrammaticStreamerDraftUpdate == false else { return }
                                             scheduleStreamerApply()
                                         }
 
@@ -446,14 +401,14 @@ struct WebUISettingsPanel: View {
                                     Text("1024x768").tag("1024x768")
                                     Text("Custom").tag("custom")
                                 }
-                                .disabled(streamerState == nil || streamerFeatures?.resolution == false)
+                                .disabled(model.streamerState == nil || streamerFeatures?.resolution == false)
 
                                 if streamerResolutionSelection.wrappedValue == "custom" {
-                                    TextField("Custom resolution (e.g. 1920x1080)", text: $streamerResolution)
+                                    TextField("Custom resolution (e.g. 1920x1080)", text: $model.streamerResolution)
                                         .textFieldStyle(.roundedBorder)
-                                        .disabled(streamerState == nil || streamerFeatures?.resolution == false)
-                                        .onChange(of: streamerResolution) { _, _ in
-                                            guard isProgrammaticStreamerDraftUpdate == false else { return }
+                                        .disabled(model.streamerState == nil || streamerFeatures?.resolution == false)
+                                        .onChange(of: model.streamerResolution) { _, _ in
+                                            guard model.isProgrammaticStreamerDraftUpdate == false else { return }
                                             guard focusedStreamerField == nil else { return }
                                             scheduleStreamerApply()
                                         }
@@ -473,7 +428,7 @@ struct WebUISettingsPanel: View {
                         .padding(.top, 6)
                     }
 
-                    DisclosureGroup("Remote device settings", isExpanded: $isRemoteExpanded) {
+                    DisclosureGroup("Remote device settings", isExpanded: $model.isRemoteExpanded) {
                         VStack(alignment: .leading, spacing: 10) {
                             Toggle("Mouse Control", isOn: bindingBool(
                                 get: { $0.mouseControl },
@@ -573,7 +528,7 @@ struct WebUISettingsPanel: View {
                         .padding(.top, 6)
                     }
 
-                    DisclosureGroup("Keyboard settings", isExpanded: $isKeyboardExpanded) {
+                    DisclosureGroup("Keyboard settings", isExpanded: $model.isKeyboardExpanded) {
                         VStack(alignment: .leading, spacing: 10) {
                             Picker("Keymap", selection: bindingString(
                                 get: { $0.keymap },
@@ -585,7 +540,7 @@ struct WebUISettingsPanel: View {
                                 }
                             }
 
-                            if let shortcuts = config?.shortcuts, !shortcuts.isEmpty {
+                            if let shortcuts = model.config?.shortcuts, !shortcuts.isEmpty {
                                 VStack(alignment: .leading, spacing: 6) {
                                     Text("Shortcuts")
                                         .font(.subheadline)
@@ -605,7 +560,7 @@ struct WebUISettingsPanel: View {
                         .padding(.top, 6)
                     }
 
-                    DisclosureGroup("Audio", isExpanded: $isAudioExpanded) {
+                    DisclosureGroup("Audio", isExpanded: $model.isAudioExpanded) {
                         VStack(alignment: .leading, spacing: 10) {
                             Toggle("Audio", isOn: $webRTCManager.audioEnabled)
                             Toggle("Microphone", isOn: $webRTCManager.micEnabled)
@@ -613,10 +568,10 @@ struct WebUISettingsPanel: View {
                             Picker("Microphone device", selection: $audioInputDeviceUID) {
                                 Text("System Default").tag("")
                                 if !audioInputDeviceUID.isEmpty,
-                                   audioInputDevices.contains(where: { $0.uid == audioInputDeviceUID }) == false {
+                                   model.audioInputDevices.contains(where: { $0.uid == audioInputDeviceUID }) == false {
                                     Text("Unavailable").tag(audioInputDeviceUID)
                                 }
-                                ForEach(audioInputDevices, id: \.uid) { device in
+                                ForEach(model.audioInputDevices, id: \.uid) { device in
                                     Text(device.name).tag(device.uid)
                                 }
                             }
@@ -624,10 +579,10 @@ struct WebUISettingsPanel: View {
                             Picker("Output device", selection: $audioOutputDeviceUID) {
                                 Text("System Default").tag("")
                                 if !audioOutputDeviceUID.isEmpty,
-                                   audioOutputDevices.contains(where: { $0.uid == audioOutputDeviceUID }) == false {
+                                   model.audioOutputDevices.contains(where: { $0.uid == audioOutputDeviceUID }) == false {
                                     Text("Unavailable").tag(audioOutputDeviceUID)
                                 }
-                                ForEach(audioOutputDevices, id: \.uid) { device in
+                                ForEach(model.audioOutputDevices, id: \.uid) { device in
                                     Text(device.name).tag(device.uid)
                                 }
                             }
@@ -643,10 +598,10 @@ struct WebUISettingsPanel: View {
                         }
                         .padding(.top, 6)
                         .onAppear { refreshAudioDevices() }
-                        .onChange(of: isAudioExpanded) { _, _ in refreshAudioDevices() }
+                        .onChange(of: model.isAudioExpanded) { _, _ in refreshAudioDevices() }
                     }
 
-                    DisclosureGroup("System", isExpanded: $isSystemExpanded) {
+                    DisclosureGroup("System", isExpanded: $model.isSystemExpanded) {
                         VStack(alignment: .leading, spacing: 10) {
                             Picker("App appearance", selection: $appAppearance) {
                                 ForEach(appAppearanceOptions, id: \.0) { value, label in
@@ -670,7 +625,7 @@ struct WebUISettingsPanel: View {
                         .padding(.top, 6)
                     }
 
-                    DisclosureGroup("Network", isExpanded: $isNetworkExpanded) {
+                    DisclosureGroup("Network", isExpanded: $model.isNetworkExpanded) {
                         VStack(alignment: .leading, spacing: 10) {
                             NotImplementedRow(title: "Modify")
                             NotImplementedRow(title: "Wi-Fi")
@@ -679,7 +634,7 @@ struct WebUISettingsPanel: View {
                         .padding(.top, 6)
                     }
 
-                    DisclosureGroup("Advanced", isExpanded: $isAdvancedExpanded) {
+                    DisclosureGroup("Advanced", isExpanded: $model.isAdvancedExpanded) {
                         VStack(alignment: .leading, spacing: 10) {
                             Button("Reset KVM") {
                                 Task { await resetKVM() }
@@ -694,9 +649,9 @@ struct WebUISettingsPanel: View {
 
             Divider()
 
-            if let errorMessage {
+            if let visibleError = model.errorMessage {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(errorMessage)
+                    Text(visibleError)
                         .foregroundColor(.red)
                         .font(.caption)
                         .textSelection(.enabled)
@@ -704,18 +659,18 @@ struct WebUISettingsPanel: View {
 
                     HStack(spacing: 10) {
                         Button("History…") {
-                            showingErrorHistory = true
+                            model.showingErrorHistory = true
                         }
                         .buttonStyle(.borderless)
 
                         Button("Copy") {
                             NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(errorMessage, forType: .string)
+                            NSPasteboard.general.setString(visibleError, forType: .string)
                         }
                         .buttonStyle(.borderless)
 
                         Button("Dismiss") {
-                            self.errorMessage = nil
+                            model.errorMessage = nil
                         }
                         .buttonStyle(.borderless)
 
@@ -728,11 +683,10 @@ struct WebUISettingsPanel: View {
             }
         }
         .background(panelBackground)
-        .sheet(isPresented: $showingErrorHistory) {
-            ErrorHistorySheet(entries: errorHistory)
+        .sheet(isPresented: $model.showingErrorHistory) {
+            ErrorHistorySheet(entries: model.errorHistory)
         }
         .task(id: settingsLoadID) {
-            guard isPresented else { return }
             await load()
         }
     }
@@ -765,7 +719,7 @@ struct WebUISettingsPanel: View {
         }
 
         await MainActor.run {
-            isApplyingStreamer = true
+            model.isApplyingStreamer = true
         }
 
         do {
@@ -773,7 +727,7 @@ struct WebUISettingsPanel: View {
             try? await Task.sleep(nanoseconds: 300_000_000)
             let st = try? await client.getStreamerState()
             await MainActor.run {
-                streamerState = st
+                model.streamerState = st
                 syncStreamerDraft(from: st)
             }
         } catch {
@@ -783,7 +737,7 @@ struct WebUISettingsPanel: View {
         }
 
         await MainActor.run {
-            isApplyingStreamer = false
+            model.isApplyingStreamer = false
             if let streamQuality {
                 updateConfig { $0.streamQuality = streamQuality }
             }
@@ -846,22 +800,22 @@ struct WebUISettingsPanel: View {
 
     @MainActor
     private func recordError(_ message: String) {
-        errorMessage = message
-        errorHistory.insert(ErrorEntry(date: Date(), message: message), at: 0)
-        if errorHistory.count > 50 {
-            errorHistory.removeLast(errorHistory.count - 50)
+        model.errorMessage = message
+        model.errorHistory.insert(ErrorEntry(date: Date(), message: message), at: 0)
+        if model.errorHistory.count > 50 {
+            model.errorHistory.removeLast(model.errorHistory.count - 50)
         }
     }
 
     private func availableKeymaps() -> [String] {
-        if let keymaps {
-            let list = keymaps.keymaps.available
-            if let current = config?.keymap, !current.isEmpty, !list.contains(current) {
+        if let loadedKeymaps = model.keymaps {
+            let list = loadedKeymaps.keymaps.available
+            if let current = model.config?.keymap, !current.isEmpty, !list.contains(current) {
                 return [current] + list
             }
             return list
         }
-        if let current = config?.keymap, !current.isEmpty {
+        if let current = model.config?.keymap, !current.isEmpty {
             return [current]
         }
         return ["en-us"]
@@ -870,58 +824,58 @@ struct WebUISettingsPanel: View {
     private func load() async {
         await MainActor.run {
             if let device = kvmDeviceManager.connectedDevice {
-                codecPreference = webRTCManager.codecPreference(for: device)
+                model.codecPreference = webRTCManager.codecPreference(for: device)
             } else {
-                codecPreference = .auto
+                model.codecPreference = .auto
             }
         }
 
         guard let client = kvmDeviceManager.glkvmClient else {
             await MainActor.run {
-                config = nil
-                keymaps = nil
-                streamerState = nil
-                currentEdid = ""
-                selectedEdidOption = "CUSTOMIZE"
-                customEdidDraft = ""
-                selectedVideoQualityPreset = 1
+                model.config = nil
+                model.keymaps = nil
+                model.streamerState = nil
+                model.currentEdid = ""
+                model.selectedEdidOption = "CUSTOMIZE"
+                model.customEdidDraft = ""
+                model.selectedVideoQualityPreset = 1
             }
             return
         }
         await MainActor.run {
-            isLoading = true
+            model.isLoading = true
         }
         do {
-            async let keymaps = client.getHidKeymaps()
+            async let keymapsRequest = client.getHidKeymaps()
             async let streamer = client.getStreamerState()
-            let config = try await client.getSystemConfig()
-            let km = try await keymaps
+            let loadedConfig = try await client.getSystemConfig()
+            let km = try await keymapsRequest
             let st = try await streamer
             let edidValue = try await client.getEDID()
             await MainActor.run {
-                self.config = config
-                inputManager.setGLKVMAbsoluteMouseMode(config.isAbsoluteMouse)
-                webRTCManager.setPreferLowLatencyPlayout(config.videoProcessing == "low_latency_first")
-                self.keymaps = km
-                self.streamerState = st
-                self.currentEdid = edidValue
+                model.config = loadedConfig
+                inputManager.setGLKVMAbsoluteMouseMode(loadedConfig.isAbsoluteMouse)
+                webRTCManager.setPreferLowLatencyPlayout(loadedConfig.videoProcessing == "low_latency_first")
+                model.keymaps = km
+                model.streamerState = st
+                model.currentEdid = edidValue
                 syncEdidSelectionFromCurrent()
                 if let params = st.params,
                    params.h264Bitrate == 20000,
                    params.h264Gop == 60,
                    params.quality == 100 {
-                    selectedVideoQualityPreset = videoQualityInsaneTag
-                } else if (0...3).contains(config.streamQuality) {
-                    selectedVideoQualityPreset = config.streamQuality
+                    model.selectedVideoQualityPreset = videoQualityInsaneTag
+                } else if (0...3).contains(loadedConfig.streamQuality) {
+                    model.selectedVideoQualityPreset = loadedConfig.streamQuality
                 } else {
-                    selectedVideoQualityPreset = videoQualityCustomTag
+                    model.selectedVideoQualityPreset = videoQualityCustomTag
                 }
                 syncStreamerDraft(from: st)
-                isLoading = false
+                model.isLoading = false
             }
         } catch {
             await MainActor.run {
-                isLoading = false
+                model.isLoading = false
                 recordError("Failed to load settings: \(error)")
             }
         }
@@ -936,18 +890,18 @@ struct WebUISettingsPanel: View {
 
     @MainActor
     private func syncEdidSelectionFromCurrent() {
-        isProgrammaticEdidSelectionUpdate = true
+        model.isProgrammaticEdidSelectionUpdate = true
         defer {
             Task { @MainActor in
                 await Task.yield()
-                isProgrammaticEdidSelectionUpdate = false
+                model.isProgrammaticEdidSelectionUpdate = false
             }
         }
 
-        let normalizedCurrent = normalizedEdid(currentEdid)
+        let normalizedCurrent = normalizedEdid(model.currentEdid)
         if normalizedCurrent.isEmpty {
-            selectedEdidOption = "CUSTOMIZE"
-            customEdidDraft = ""
+            model.selectedEdidOption = "CUSTOMIZE"
+            model.customEdidDraft = ""
             return
         }
 
@@ -955,13 +909,13 @@ struct WebUISettingsPanel: View {
             guard let edid = resolvedEdid(for: opt) else { return false }
             return normalizedEdid(edid) == normalizedCurrent
         }) {
-            selectedEdidOption = match.id
-            customEdidDraft = currentEdid
+            model.selectedEdidOption = match.id
+            model.customEdidDraft = model.currentEdid
             return
         }
 
-        selectedEdidOption = "CUSTOMIZE"
-        customEdidDraft = currentEdid
+        model.selectedEdidOption = "CUSTOMIZE"
+        model.customEdidDraft = model.currentEdid
     }
 
     @MainActor
@@ -971,16 +925,16 @@ struct WebUISettingsPanel: View {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        isApplyingEdid = true
+        model.isApplyingEdid = true
 
         do {
             try await client.setEDID(trimmed)
             let updated = try await client.getEDID()
-            currentEdid = updated
+            model.currentEdid = updated
             syncEdidSelectionFromCurrent()
-            isApplyingEdid = false
+            model.isApplyingEdid = false
         } catch {
-            isApplyingEdid = false
+            model.isApplyingEdid = false
             recordError("Failed to apply EDID: \(error)")
         }
     }
@@ -991,30 +945,30 @@ struct WebUISettingsPanel: View {
 
         if focusedStreamerField != nil { return }
 
-        isProgrammaticStreamerDraftUpdate = true
+        model.isProgrammaticStreamerDraftUpdate = true
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 120_000_000)
-            isProgrammaticStreamerDraftUpdate = false
+            model.isProgrammaticStreamerDraftUpdate = false
         }
 
-        if let desiredFps = params.desiredFps { streamerDesiredFps = desiredFps }
-        if let quality = params.quality { streamerQuality = quality }
-        if let bitrate = params.h264Bitrate { streamerH264Bitrate = bitrate }
-        if let gop = params.h264Gop { streamerH264Gop = gop }
-        if let zeroDelay = params.zeroDelay { streamerZeroDelay = zeroDelay }
-        if let resolution = params.resolution { streamerResolution = resolution }
+        if let desiredFps = params.desiredFps { model.streamerDesiredFps = desiredFps }
+        if let quality = params.quality { model.streamerQuality = quality }
+        if let bitrate = params.h264Bitrate { model.streamerH264Bitrate = bitrate }
+        if let gop = params.h264Gop { model.streamerH264Gop = gop }
+        if let zeroDelay = params.zeroDelay { model.streamerZeroDelay = zeroDelay }
+        if let resolution = params.resolution { model.streamerResolution = resolution }
 
-        streamerDesiredFpsText = String(streamerDesiredFps)
-        streamerQualityText = String(streamerQuality)
-        streamerH264BitrateText = String(streamerH264Bitrate)
-        streamerH264GopText = String(streamerH264Gop)
+        model.streamerDesiredFpsText = String(model.streamerDesiredFps)
+        model.streamerQualityText = String(model.streamerQuality)
+        model.streamerH264BitrateText = String(model.streamerH264Bitrate)
+        model.streamerH264GopText = String(model.streamerH264Gop)
     }
 
     @MainActor
     private func scheduleStreamerApply() {
-        guard isProgrammaticStreamerDraftUpdate == false else { return }
-        applyStreamerTask?.cancel()
-        applyStreamerTask = Task {
+        guard model.isProgrammaticStreamerDraftUpdate == false else { return }
+        model.applyStreamerTask?.cancel()
+        model.applyStreamerTask = Task {
             try? await Task.sleep(nanoseconds: 250_000_000)
             await applyStreamerParams()
         }
@@ -1023,11 +977,11 @@ struct WebUISettingsPanel: View {
     @MainActor
     private func applyStreamerParams() async {
         guard let client = kvmDeviceManager.glkvmClient else { return }
-        guard streamerState != nil else { return }
+        guard model.streamerState != nil else { return }
 
-        guard isProgrammaticStreamerDraftUpdate == false else { return }
+        guard model.isProgrammaticStreamerDraftUpdate == false else { return }
 
-        isApplyingStreamer = true
+        model.isApplyingStreamer = true
 
         let features = streamerFeatures
 
@@ -1038,10 +992,10 @@ struct WebUISettingsPanel: View {
         let gopMin = streamerLimits?.h264Gop.min ?? 1
         let gopMax = streamerLimits?.h264Gop.max ?? 300
 
-        let clampedFps = clamp(streamerDesiredFps, min: desiredFpsMin, max: desiredFpsMax)
-        let clampedQuality = clamp(streamerQuality, min: 0, max: 100)
-        let clampedBitrate = clamp(streamerH264Bitrate, min: bitrateMin, max: bitrateMax)
-        let clampedGop = clamp(streamerH264Gop, min: gopMin, max: gopMax)
+        let clampedFps = clamp(model.streamerDesiredFps, min: desiredFpsMin, max: desiredFpsMax)
+        let clampedQuality = clamp(model.streamerQuality, min: 0, max: 100)
+        let clampedBitrate = clamp(model.streamerH264Bitrate, min: bitrateMin, max: bitrateMax)
+        let clampedGop = clamp(model.streamerH264Gop, min: gopMin, max: gopMax)
 
         var params: [String: String] = [:]
         params["desired_fps"] = String(clampedFps)
@@ -1056,11 +1010,11 @@ struct WebUISettingsPanel: View {
         }
 
         if features?.zeroDelay != false {
-            params["zero_delay"] = streamerZeroDelay ? "true" : "false"
+            params["zero_delay"] = model.streamerZeroDelay ? "true" : "false"
         }
 
         if features?.resolution != false {
-            let trimmed = streamerResolution.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmed = model.streamerResolution.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmed.isEmpty {
                 params["resolution"] = trimmed
             }
@@ -1070,24 +1024,24 @@ struct WebUISettingsPanel: View {
             try await client.setStreamerParams(params)
             try? await Task.sleep(nanoseconds: 300_000_000)
             let st = try? await client.getStreamerState()
-            streamerState = st
+            model.streamerState = st
             syncStreamerDraft(from: st)
-            isApplyingStreamer = false
+            model.isApplyingStreamer = false
         } catch {
-            isApplyingStreamer = false
+            model.isApplyingStreamer = false
             recordError("Failed to apply streamer params: \(error)")
         }
     }
 
     @MainActor
     private func commitStreamerEditsAndApplyIfNeeded() {
-        guard isProgrammaticStreamerDraftUpdate == false else { return }
+        guard model.isProgrammaticStreamerDraftUpdate == false else { return }
 
-        isProgrammaticStreamerDraftUpdate = true
+        model.isProgrammaticStreamerDraftUpdate = true
         defer {
             Task { @MainActor in
                 await Task.yield()
-                isProgrammaticStreamerDraftUpdate = false
+                model.isProgrammaticStreamerDraftUpdate = false
             }
         }
 
@@ -1098,25 +1052,25 @@ struct WebUISettingsPanel: View {
         let gopMin = streamerLimits?.h264Gop.min ?? 1
         let gopMax = streamerLimits?.h264Gop.max ?? 300
 
-        let parsedFps = Int(streamerDesiredFpsText.trimmingCharacters(in: .whitespacesAndNewlines)) ?? streamerDesiredFps
-        let parsedQuality = Int(streamerQualityText.trimmingCharacters(in: .whitespacesAndNewlines)) ?? streamerQuality
-        let parsedBitrate = Int(streamerH264BitrateText.trimmingCharacters(in: .whitespacesAndNewlines)) ?? streamerH264Bitrate
-        let parsedGop = Int(streamerH264GopText.trimmingCharacters(in: .whitespacesAndNewlines)) ?? streamerH264Gop
+        let parsedFps = Int(model.streamerDesiredFpsText.trimmingCharacters(in: .whitespacesAndNewlines)) ?? model.streamerDesiredFps
+        let parsedQuality = Int(model.streamerQualityText.trimmingCharacters(in: .whitespacesAndNewlines)) ?? model.streamerQuality
+        let parsedBitrate = Int(model.streamerH264BitrateText.trimmingCharacters(in: .whitespacesAndNewlines)) ?? model.streamerH264Bitrate
+        let parsedGop = Int(model.streamerH264GopText.trimmingCharacters(in: .whitespacesAndNewlines)) ?? model.streamerH264Gop
 
         let nextFps = clamp(parsedFps, min: desiredFpsMin, max: desiredFpsMax)
         let nextQuality = clamp(parsedQuality, min: 0, max: 100)
         let nextBitrate = clamp(parsedBitrate, min: bitrateMin, max: bitrateMax)
         let nextGop = clamp(parsedGop, min: gopMin, max: gopMax)
 
-        if nextFps != streamerDesiredFps { streamerDesiredFps = nextFps }
-        if nextQuality != streamerQuality { streamerQuality = nextQuality }
-        if nextBitrate != streamerH264Bitrate { streamerH264Bitrate = nextBitrate }
-        if nextGop != streamerH264Gop { streamerH264Gop = nextGop }
+        if nextFps != model.streamerDesiredFps { model.streamerDesiredFps = nextFps }
+        if nextQuality != model.streamerQuality { model.streamerQuality = nextQuality }
+        if nextBitrate != model.streamerH264Bitrate { model.streamerH264Bitrate = nextBitrate }
+        if nextGop != model.streamerH264Gop { model.streamerH264Gop = nextGop }
 
-        streamerDesiredFpsText = String(streamerDesiredFps)
-        streamerQualityText = String(streamerQuality)
-        streamerH264BitrateText = String(streamerH264Bitrate)
-        streamerH264GopText = String(streamerH264Gop)
+        model.streamerDesiredFpsText = String(model.streamerDesiredFps)
+        model.streamerQualityText = String(model.streamerQuality)
+        model.streamerH264BitrateText = String(model.streamerH264Bitrate)
+        model.streamerH264GopText = String(model.streamerH264Gop)
 
         // Apply once after commit.
         Task { @MainActor in
@@ -1128,7 +1082,7 @@ struct WebUISettingsPanel: View {
     private var streamerResolutionSelection: Binding<String> {
         Binding(
             get: {
-                let trimmed = streamerResolution.trimmingCharacters(in: .whitespacesAndNewlines)
+                let trimmed = model.streamerResolution.trimmingCharacters(in: .whitespacesAndNewlines)
                 if trimmed.isEmpty { return "" }
                 let presets: Set<String> = ["1920x1080", "1600x900", "1280x720", "1024x768"]
                 if presets.contains(trimmed) {
@@ -1140,7 +1094,7 @@ struct WebUISettingsPanel: View {
                 if newValue == "custom" {
                     return
                 }
-                streamerResolution = newValue
+                model.streamerResolution = newValue
                 scheduleStreamerApply()
             }
         )
@@ -1148,9 +1102,9 @@ struct WebUISettingsPanel: View {
 
     private var codecPreferenceBinding: Binding<CodecPreference> {
         Binding(
-            get: { codecPreference },
+            get: { model.codecPreference },
             set: { newPreference in
-                codecPreference = newPreference
+                model.codecPreference = newPreference
                 guard let device = kvmDeviceManager.connectedDevice else { return }
                 Task { @MainActor in
                     let wasConnected = webRTCManager.isConnected
@@ -1171,8 +1125,8 @@ struct WebUISettingsPanel: View {
 
     @MainActor
     private func refreshAudioDevices() {
-        audioInputDevices = CoreAudioDevices.listInputDevices()
-        audioOutputDevices = CoreAudioDevices.listOutputDevices()
+        model.audioInputDevices = CoreAudioDevices.listInputDevices()
+        model.audioOutputDevices = CoreAudioDevices.listOutputDevices()
     }
 
     @MainActor
@@ -1186,33 +1140,33 @@ struct WebUISettingsPanel: View {
     }
 
     private func updateConfig(_ mutate: (inout GLKVMSystemConfig) -> Void) {
-        guard var config else { return }
-        mutate(&config)
-        self.config = config
-        scheduleApply(config)
+        guard var next = model.config else { return }
+        mutate(&next)
+        model.config = next
+        scheduleApply(next)
     }
 
-    private func scheduleApply(_ config: GLKVMSystemConfig) {
-        applyTask?.cancel()
-        applyTask = Task {
+    private func scheduleApply(_ newConfig: GLKVMSystemConfig) {
+        model.applyTask?.cancel()
+        model.applyTask = Task {
             try? await Task.sleep(nanoseconds: 150_000_000)
-            await apply(config)
+            await apply(newConfig)
         }
     }
 
-    private func apply(_ config: GLKVMSystemConfig) async {
+    private func apply(_ newConfig: GLKVMSystemConfig) async {
         guard let client = kvmDeviceManager.glkvmClient else { return }
-        await MainActor.run { isApplying = true }
+        await MainActor.run { model.isApplying = true }
         do {
-            let updated = try await client.setSystemConfig(config)
+            let updated = try await client.setSystemConfig(newConfig)
             await MainActor.run {
-                self.config = updated
+                model.config = updated
                 inputManager.setGLKVMAbsoluteMouseMode(updated.isAbsoluteMouse)
-                isApplying = false
+                model.isApplying = false
             }
         } catch {
             await MainActor.run {
-                isApplying = false
+                model.isApplying = false
                 recordError("Failed to apply settings: \(error)")
             }
         }
@@ -1236,9 +1190,9 @@ struct WebUISettingsPanel: View {
         defaultValue: String
     ) -> Binding<String> {
         Binding(
-            get: { config.map(get) ?? defaultValue },
+            get: { model.config.map(get) ?? defaultValue },
             set: { newValue in
-                guard config != nil, !isLoading, !isApplying else { return }
+                guard model.config != nil, !model.isLoading, !model.isApplying else { return }
                 updateConfig { set(&$0, newValue) }
             }
         )
@@ -1250,9 +1204,9 @@ struct WebUISettingsPanel: View {
         defaultValue: Int
     ) -> Binding<Int> {
         Binding(
-            get: { config.map(get) ?? defaultValue },
+            get: { model.config.map(get) ?? defaultValue },
             set: { newValue in
-                guard config != nil, !isLoading, !isApplying else { return }
+                guard model.config != nil, !model.isLoading, !model.isApplying else { return }
                 updateConfig { set(&$0, newValue) }
             }
         )
@@ -1264,16 +1218,16 @@ struct WebUISettingsPanel: View {
         defaultValue: Bool
     ) -> Binding<Bool> {
         Binding(
-            get: { config.map(get) ?? defaultValue },
+            get: { model.config.map(get) ?? defaultValue },
             set: { newValue in
-                guard config != nil, !isLoading, !isApplying else { return }
+                guard model.config != nil, !model.isLoading, !model.isApplying else { return }
                 updateConfig { set(&$0, newValue) }
             }
         )
     }
 
     private func bindingIntValue(get: @escaping (GLKVMSystemConfig) -> Int, defaultValue: Int) -> Int {
-        config.map(get) ?? defaultValue
+        model.config.map(get) ?? defaultValue
     }
 }
 
