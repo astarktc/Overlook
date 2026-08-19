@@ -10,8 +10,9 @@ import SwiftUI
 /// `@StateObject`, so closing and reopening the panel shows the previously loaded content
 /// instead of starting from scratch.
 ///
-/// This is storage only: the panel keeps its own load/apply logic and its `@FocusState`
-/// (which cannot live in an `ObservableObject`).
+/// This is storage only: the load/apply logic lives in `WebUISettingsActions` (ticket 05) and the
+/// streamer fields' `@FocusState` stays in the view that owns them (it cannot live in an
+/// `ObservableObject`), mirrored here as `focusedStreamerField`.
 @MainActor
 final class WebUISettingsPanelModel: ObservableObject {
     struct ErrorEntry: Identifiable, Hashable {
@@ -19,6 +20,20 @@ final class WebUISettingsPanelModel: ObservableObject {
         let date: Date
         let message: String
     }
+
+    /// One of the custom-quality streamer text fields.
+    enum StreamerField: Hashable {
+        case fps
+        case quality
+        case bitrate
+        case gop
+        case resolution
+    }
+
+    /// Tag of the "Custom" entry in the video quality picker (i.e. "use the streamer fields").
+    static let videoQualityCustomTag: Int = -1
+    /// Tag of the "Insane" preset, which is a preset the device config itself cannot represent.
+    static let videoQualityInsaneTag: Int = 4
 
     // Loaded remote state.
     @Published var config: GLKVMSystemConfig?
@@ -54,6 +69,12 @@ final class WebUISettingsPanelModel: ObservableObject {
     // Video quality / codec.
     @Published var selectedVideoQualityPreset: Int = 1
     @Published var codecPreference: CodecPreference = .auto
+
+    /// Mirror of the streamer fields' `@FocusState` (which cannot live in an `ObservableObject`).
+    /// Deliberately *not* `@Published`: it exists so the apply/sync logic can skip clobbering a
+    /// field the user is editing, and publishing it would invalidate the panel on every focus
+    /// change on top of the invalidation SwiftUI already does for `@FocusState`.
+    var focusedStreamerField: StreamerField?
 
     // Debounced apply tasks. Deliberately not cancelled when the panel closes: an apply that is
     // already scheduled should still reach the device.

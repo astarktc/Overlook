@@ -69,6 +69,9 @@
 		01000045 /* StreamTelemetry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000039 /* StreamTelemetry.swift */; };
 		01000046 /* StreamTelemetryViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200003A /* StreamTelemetryViews.swift */; };
 		01000047 /* WebUISettingsPanelModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200003B /* WebUISettingsPanelModel.swift */; };
+		01000048 /* EDIDCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000048 /* EDIDCatalog.swift */; };
+		01000049 /* WebUISettingsActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000049 /* WebUISettingsActions.swift */; };
+		0100004A /* WebUISettingsSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200004A /* WebUISettingsSections.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -123,6 +126,9 @@
 		02000039 /* StreamTelemetry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamTelemetry.swift; sourceTree = "<group>"; };
 		0200003A /* StreamTelemetryViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamTelemetryViews.swift; sourceTree = "<group>"; };
 		0200003B /* WebUISettingsPanelModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebUISettingsPanelModel.swift; sourceTree = "<group>"; };
+		02000048 /* EDIDCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EDIDCatalog.swift; sourceTree = "<group>"; };
+		02000049 /* WebUISettingsActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebUISettingsActions.swift; sourceTree = "<group>"; };
+		0200004A /* WebUISettingsSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebUISettingsSections.swift; sourceTree = "<group>"; };
 		03000001 /* Overlook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Overlook.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		03000002 /* OverlookTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OverlookTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -174,6 +180,9 @@
 				0200001B /* StatusBarView.swift */,
 				0200003A /* StreamTelemetryViews.swift */,
 				0200003B /* WebUISettingsPanelModel.swift */,
+				02000048 /* EDIDCatalog.swift */,
+				02000049 /* WebUISettingsActions.swift */,
+				0200004A /* WebUISettingsSections.swift */,
 				02000039 /* StreamTelemetry.swift */,
 				02000038 /* DiagFlags.swift */,
 				02000017 /* OCRViews.swift */,
@@ -370,6 +379,9 @@
 				0100001C /* StatusBarView.swift in Sources */,
 				01000046 /* StreamTelemetryViews.swift in Sources */,
 				01000047 /* WebUISettingsPanelModel.swift in Sources */,
+				01000048 /* EDIDCatalog.swift in Sources */,
+				01000049 /* WebUISettingsActions.swift in Sources */,
+				0100004A /* WebUISettingsSections.swift in Sources */,
 				01000044 /* StreamTelemetry.swift in Sources */,
 				01000042 /* DiagFlags.swift in Sources */,
 				01000017 /* WebUISettingsPanel.swift in Sources */,
