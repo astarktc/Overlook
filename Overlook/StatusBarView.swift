@@ -3,7 +3,6 @@ import SwiftUI
 struct StatusBarView: View {
     let deviceName: String
     let isConnected: Bool
-    let latency: Int
     let negotiatedCodec: NegotiatedCodec?
 
     private var negotiatedCodecLabel: String? {
@@ -38,8 +37,9 @@ struct StatusBarView: View {
                     .foregroundColor(.secondary)
             }
 
-            Text("Latency: \(latency)ms")
-                .font(.caption)
+            // Latency observes the telemetry model itself, so a latency tick invalidates that
+            // label alone rather than this whole bar.
+            ConnectionLatencyLabel()
         }
         .padding()
         .background(Color(NSColor.controlBackgroundColor))

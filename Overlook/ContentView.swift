@@ -3,30 +3,6 @@ import SwiftUI
 import Foundation
 import AppKit
 
-// [DEBUG-swiftui-audit] Temporary instrumentation for the SwiftUI invalidation-storm audit.
-// Every flag is read once from the process environment at first access. To remove the whole
-// audit, delete this block plus every other line tagged `[DEBUG-swiftui-audit]`.
-enum DiagFlags {
-    private static let env = ProcessInfo.processInfo.environment
-
-    private static func flag(_ key: String) -> Bool {
-        env[key] == "1"
-    }
-
-    /// OVERLOOK_DIAG_PRINT_CHANGES=1 → `Self._printChanges()` at the top of instrumented bodies.
-    static let printChanges = flag("OVERLOOK_DIAG_PRINT_CHANGES")
-    /// OVERLOOK_DIAG_NO_STATS=1 → disable periodic WebRTC stats/latency publishing.
-    static let noStats = flag("OVERLOOK_DIAG_NO_STATS")
-    /// OVERLOOK_DIAG_NO_HEALTH=1 → disable stream-health @Published writes.
-    static let noHealth = flag("OVERLOOK_DIAG_NO_HEALTH")
-    /// OVERLOOK_DIAG_NO_FPS=1 → disable inboundFps publishing from the decode path.
-    static let noFps = flag("OVERLOOK_DIAG_NO_FPS")
-    /// OVERLOOK_DIAG_NO_WINDOW_SETTERS=1 → neuter the window title/aspect NSViewRepresentables.
-    static let noWindowSetters = flag("OVERLOOK_DIAG_NO_WINDOW_SETTERS")
-    /// OVERLOOK_DIAG_NO_RENDER_HOP=1 → do not attach ConnectionGenerationVideoRenderer to the track.
-    static let noRenderHop = flag("OVERLOOK_DIAG_NO_RENDER_HOP")
-}
-
 // swiftlint:disable:next type_body_length
 struct ContentView: View {
     @EnvironmentObject var webRTCManager: WebRTCManager
@@ -80,7 +56,11 @@ struct ContentView: View {
         }
     }
 
-    private var windowTitle: String {
+    // ticket 04 will drop the live stats from the title entirely; then this becomes the
+    // whole title and `WindowTitleTelemetryHost` can go away.
+    /// Everything in the window title that is *not* telemetry. The kbps/fps half is read
+    /// inside `WindowTitleTelemetryHost`, so a stats tick never invalidates this body.
+    private var windowTitlePrefix: String {
         let device = kvmDeviceManager.connectedDevice
 
         let deviceLabel: String
@@ -108,21 +88,7 @@ struct ContentView: View {
             resolution = "—"
         }
 
-        let kbps: String
-        if let value = webRTCManager.inboundVideoKbps {
-            kbps = "\(value) kbps"
-        } else {
-            kbps = "— kbps"
-        }
-
-        let fps: String
-        if let value = webRTCManager.inboundFps {
-            fps = "\(Int(value.rounded())) fps dynamic"
-        } else {
-            fps = "— fps dynamic"
-        }
-
-        return "Overlook - \(deviceLabel) / \(connectionState) / \(resolution) / \(kbps) / \(fps)"
+        return "Overlook - \(deviceLabel) / \(connectionState) / \(resolution)"
     }
 
     private func applyAppAppearance() {
@@ -258,20 +224,7 @@ struct ContentView: View {
                     isScanning: kvmDeviceManager.isScanning,
                     devices: kvmDeviceManager.availableDevices,
                     connectedDeviceName: kvmDeviceManager.connectedDevice?.name,
-                    latency: webRTCManager.latency,
                     videoSize: webRTCManager.videoSize,
-                    inboundVideoKbps: webRTCManager.inboundVideoKbps,
-                    inboundFps: webRTCManager.inboundFps,
-                    inboundVideoPlayoutDelayMs: webRTCManager.inboundVideoPlayoutDelayMs,
-                    inboundVideoJitterMs: webRTCManager.inboundVideoJitterMs,
-                    inboundVideoDecodeMs: webRTCManager.inboundVideoDecodeMs,
-                    inboundVideoPacketsLost: webRTCManager.inboundVideoPacketsLost,
-                    iceCurrentRoundTripTimeMs: webRTCManager.iceCurrentRoundTripTimeMs,
-                    inboundAudioKbps: webRTCManager.inboundAudioKbps,
-                    inboundAudioPlayoutDelayMs: webRTCManager.inboundAudioPlayoutDelayMs,
-                    inboundAudioJitterMs: webRTCManager.inboundAudioJitterMs,
-                    inboundAudioPacketsLost: webRTCManager.inboundAudioPacketsLost,
-                    audioIceCurrentRoundTripTimeMs: webRTCManager.audioIceCurrentRoundTripTimeMs,
                     onScan: {
                         kvmDeviceManager.scanForDevices()
                     },
@@ -303,12 +256,11 @@ struct ContentView: View {
             StatusBarView(
                 deviceName: kvmDeviceManager.connectedDevice?.name ?? selectedDevice?.name ?? "No Device",
                 isConnected: webRTCManager.isConnected,
-                latency: webRTCManager.latency,
                 negotiatedCodec: webRTCManager.negotiatedCodec
             )
         }
         .background(WindowAspectRatioSetter(videoSize: webRTCManager.videoSize))
-        .background(WindowTitleSetter(title: windowTitle))
+        .background(WindowTitleTelemetryHost(titlePrefix: windowTitlePrefix))
         .background(WindowReferenceSetter(window: $windowRef))
         .preferredColorScheme(preferredColorScheme)
         .onAppear {
@@ -883,6 +835,24 @@ extension WindowAspectRatioSetter.Coordinator: NSWindowDelegate {
     }
 }
 
+// ticket 04: the window title is scheduled to stop carrying live stats. Until then this tiny
+// leaf is the only telemetry observer in ContentView's subtree, so a kbps/fps tick invalidates
+// it alone instead of the whole window body.
+private struct WindowTitleTelemetryHost: View {
+    @EnvironmentObject private var telemetryModel: StreamTelemetryModel
+
+    let titlePrefix: String
+
+    var body: some View {
+        // [DEBUG-swiftui-audit]
+        let _ = DiagFlags.printChanges ? Self._printChanges() : ()
+        let telemetry = telemetryModel.snapshot
+        let kbps = telemetry.videoKbps.map { "\($0) kbps" } ?? "— kbps"
+        let fps = telemetry.videoFps.map { "\($0) fps dynamic" } ?? "— fps dynamic"
+        WindowTitleSetter(title: "\(titlePrefix) / \(kbps) / \(fps)")
+    }
+}
+
 private struct WindowTitleSetter: NSViewRepresentable {
     let title: String
 
@@ -912,22 +882,11 @@ struct ConnectionsPopoverView: View {
     let isScanning: Bool
     let devices: [KVMDevice]
     let connectedDeviceName: String?
-    let latency: Int
 
+    /// Guest resolution, forwarded to the stats section. Telemetry itself is not passed in:
+    /// `ConnectionLatencyLabel` and `StreamStatsSection` observe it themselves, so this body
+    /// does not re-evaluate on every tick.
     let videoSize: CGSize?
-    let inboundVideoKbps: Int?
-    let inboundFps: Double?
-    let inboundVideoPlayoutDelayMs: Int?
-    let inboundVideoJitterMs: Int?
-    let inboundVideoDecodeMs: Int?
-    let inboundVideoPacketsLost: Int?
-    let iceCurrentRoundTripTimeMs: Int?
-
-    let inboundAudioKbps: Int?
-    let inboundAudioPlayoutDelayMs: Int?
-    let inboundAudioJitterMs: Int?
-    let inboundAudioPacketsLost: Int?
-    let audioIceCurrentRoundTripTimeMs: Int?
 
     let onScan: () -> Void
     let onManualConnect: () -> Void
@@ -937,25 +896,6 @@ struct ConnectionsPopoverView: View {
     var body: some View {
         // [DEBUG-swiftui-audit]
         let _ = DiagFlags.printChanges ? Self._printChanges() : ()
-        let resolutionText: String = {
-            guard let videoSize, videoSize.width > 0, videoSize.height > 0 else { return "—" }
-            return "\(Int(videoSize.width))x\(Int(videoSize.height))"
-        }()
-
-        let kbpsText = inboundVideoKbps.map { "\($0) kbps" } ?? "— kbps"
-        let fpsText = inboundFps.map { "\(Int($0.rounded())) fps" } ?? "— fps"
-        let playoutDelayText = inboundVideoPlayoutDelayMs.map { "\($0) ms" } ?? "—"
-        let jitterText = inboundVideoJitterMs.map { "\($0) ms" } ?? "—"
-        let decodeText = inboundVideoDecodeMs.map { "\($0) ms" } ?? "—"
-        let lossText = inboundVideoPacketsLost.map { String($0) } ?? "—"
-        let rttText = iceCurrentRoundTripTimeMs.map { "\($0) ms" } ?? "—"
-
-        let audioKbpsText = inboundAudioKbps.map { "\($0) kbps" } ?? "— kbps"
-        let audioPlayoutDelayText = inboundAudioPlayoutDelayMs.map { "\($0) ms" } ?? "—"
-        let audioJitterText = inboundAudioJitterMs.map { "\($0) ms" } ?? "—"
-        let audioLossText = inboundAudioPacketsLost.map { String($0) } ?? "—"
-        let audioRttText = audioIceCurrentRoundTripTimeMs.map { "\($0) ms" } ?? "—"
-
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Connections")
@@ -1006,126 +946,22 @@ struct ConnectionsPopoverView: View {
 
                     Spacer()
 
-                    Text("Latency: \(latency)ms")
-                        .font(.caption)
+                    ConnectionLatencyLabel()
                         .foregroundColor(.secondary)
                 }
             }
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text("WebRTC")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-
-                HStack {
-                    Text("Video")
-                        .font(.caption)
-                    Spacer()
-                    Text("\(resolutionText) · \(fpsText) · \(kbpsText)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                HStack {
-                    Text("Playout")
-                        .font(.caption)
-                    Spacer()
-                    Text(playoutDelayText)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                HStack {
-                    Text("Jitter")
-                        .font(.caption)
-                    Spacer()
-                    Text(jitterText)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                HStack {
-                    Text("Decode")
-                        .font(.caption)
-                    Spacer()
-                    Text(decodeText)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                HStack {
-                    Text("Lost")
-                        .font(.caption)
-                    Spacer()
-                    Text(lossText)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                HStack {
-                    Text("ICE RTT")
-                        .font(.caption)
-                    Spacer()
-                    Text(rttText)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                if inboundAudioKbps != nil || inboundAudioJitterMs != nil || inboundAudioPacketsLost != nil || audioIceCurrentRoundTripTimeMs != nil {
-                    HStack {
-                        Text("Audio")
-                            .font(.caption)
-                        Spacer()
-                        Text(audioKbpsText)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-
-                    HStack {
-                        Text("Audio Playout")
-                            .font(.caption)
-                        Spacer()
-                        Text(audioPlayoutDelayText)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-
-                    HStack {
-                        Text("Audio Jitter")
-                            .font(.caption)
-                        Spacer()
-                        Text(audioJitterText)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-
-                    HStack {
-                        Text("Audio Lost")
-                            .font(.caption)
-                        Spacer()
-                        Text(audioLossText)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-
-                    HStack {
-                        Text("Audio ICE RTT")
-                            .font(.caption)
-                        Spacer()
-                        Text(audioRttText)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
+            StreamStatsSection(videoSize: videoSize)
         }
         .padding(14)
     }
 }
 
 #Preview {
+    let webRTCManager = WebRTCManager()
     ContentView()
-        .environmentObject(WebRTCManager())
+        .environmentObject(webRTCManager)
+        .environmentObject(webRTCManager.telemetry)
         .environmentObject(InputManager())
         .environmentObject(OCRManager())
         .environmentObject(KVMDeviceManager())
