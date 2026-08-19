@@ -90,6 +90,25 @@ the Comet's display identity (ViewSonic vendor `5a63` / product `2f34`) at
 a 2× framebuffer (supersampling). If the Comet's EDID identity ever changes, the override path
 must change with it.
 
+**Resolved 2026-08-19 (evening):** the override plist alone yields HiDPI modes that macOS's
+System Settings won't classify as Retina (PPI gate from the EDID's claimed 53×30 cm physical
+size), so the native scaled-resolution thumbnail UI never appears. Solution: **BetterDisplay**
+(`brew install --cask betterdisplay`) on the work Mac — it exposes the override-created HiDPI
+modes directly and works in mirrored mode. Verified working config: BetterDisplay HiDPI
+1920×1080 → `system_profiler` reports "Resolution: 3840 x 2160, UI Looks like: 1920 x 1080 @
+60.00Hz", mirroring on (Comet = master mirror), Overlook still streams 1440p60. Larger text,
+Retina rendering, no device-side changes.
+
+**Do NOT attempt EDID reflashing on the LT6911C** (the abandoned "option A"): the chip's
+EDID-override flash region behaves write-once — `lt6911c_upgrade -e` reports success but the
+served EDID never changes (verified through chip reset, device reboot, kvmd stopped, and HDMI
+link down). Working theory: `-e` never erases (NOR flash semantics; only the `-f` firmware
+path erases), and the ViewSonic blob flashed 2026-08-08 is now immutable to `-e`. A recovery
+would require a full firmware reflash (`-f v3.bin`, risky on a production device) followed
+immediately by `-e` — deemed not worth it now that BetterDisplay solves the goal. Details:
+`docs/research/2026-08-18-comet-hidpi-4k60-bitrate.md`; patched EDID blobs + backup
+(`edid-backup-2026-08-19.txt`) remain in `.scratch/comet-quality/`.
+
 ## Guardrails (production device — it drives the operator's work Mac)
 
 - Fine: reads, logs, sink dumps, codec flips via `config.json`, kvmd restarts (~15 s).
