@@ -24,11 +24,11 @@ struct VideoSurfaceView: View {
 
     private var ocrSelectionRect: CGRect? {
         guard let start = ocrDragStart, let current = ocrDragCurrent else { return nil }
-        let x = min(start.x, current.x)
-        let y = min(start.y, current.y)
+        let originX = min(start.x, current.x)
+        let originY = min(start.y, current.y)
         let width = abs(start.x - current.x)
         let height = abs(start.y - current.y)
-        return CGRect(x: x, y: y, width: width, height: height)
+        return CGRect(x: originX, y: originY, width: width, height: height)
     }
 
     var body: some View {
@@ -156,12 +156,17 @@ struct VideoSurfaceView: View {
         }
     }
 
+    /// The UI's *desire* for OCR mode. `WebRTCManager` owns whether capture is currently possible
+    /// (it needs a rendering track) and reapplies this desire whenever rendering begins, so OCR
+    /// keeps working across an automatic reconnect without SwiftUI having to re-fire `onChange`.
     private func setOCRMode(_ enabled: Bool) {
         webRTCManager.setFrameCaptureEnabled(enabled)
         if enabled {
             ocrRegionsTask?.cancel()
             ocrRegionsTask = Task { @MainActor in
                 while !Task.isCancelled && isOCRModeEnabled {
+                    // `currentFrame` is nil while disconnected or reconnecting; the loop keeps
+                    // polling so regions reappear on their own once frames resume.
                     _ = try? await ocrManager.detectTextRegions(in: webRTCManager.currentFrame)
                     try? await Task.sleep(nanoseconds: 650_000_000)
                 }
@@ -255,7 +260,7 @@ struct VideoSurfaceView: View {
 
 #if canImport(WebRTC)
 struct VideoViewRepresentable: NSViewRepresentable {
-    let videoView: RTCMTLNSVideoView
+    let videoView: VideoRenderView
     let onMouseMove: (CGPoint, CGSize) -> Void
     let onMouseButton: (MouseButton, Bool, CGPoint) -> Void
     let onScrollWheel: (CGFloat, CGFloat) -> Void
@@ -284,7 +289,7 @@ final class TrackingContainerView: NSView {
 
     private var trackingAreaRef: NSTrackingArea?
 
-    private weak var embeddedVideoView: RTCMTLNSVideoView?
+    private weak var embeddedVideoView: VideoRenderView?
     private var embeddedConstraints: [NSLayoutConstraint] = []
 
     override init(frame frameRect: NSRect) {
@@ -323,7 +328,10 @@ final class TrackingContainerView: NSView {
         trackingAreaRef = area
     }
 
-    func embedVideoViewIfNeeded(_ videoView: RTCMTLNSVideoView) {
+    /// Pins the video view to the container's edges. The pinning lives here (not in the video
+    /// view) so the video view stays a plain layer-backed surface; the constraints are
+    /// deactivated and rebuilt only when the embedded view actually changes.
+    func embedVideoViewIfNeeded(_ videoView: VideoRenderView) {
         guard embeddedVideoView !== videoView else { return }
 
         if !embeddedConstraints.isEmpty {
@@ -354,45 +362,45 @@ final class TrackingContainerView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         super.mouseDown(with: event)
-        let p = convert(event.locationInWindow, from: nil)
-        let flipped = CGPoint(x: p.x, y: bounds.height - p.y)
+        let point = convert(event.locationInWindow, from: nil)
+        let flipped = CGPoint(x: point.x, y: bounds.height - point.y)
         onMouseButton?(.left, true, flipped)
     }
 
     override func mouseUp(with event: NSEvent) {
         super.mouseUp(with: event)
-        let p = convert(event.locationInWindow, from: nil)
-        let flipped = CGPoint(x: p.x, y: bounds.height - p.y)
+        let point = convert(event.locationInWindow, from: nil)
+        let flipped = CGPoint(x: point.x, y: bounds.height - point.y)
         onMouseButton?(.left, false, flipped)
     }
 
     override func rightMouseDown(with event: NSEvent) {
         super.rightMouseDown(with: event)
-        let p = convert(event.locationInWindow, from: nil)
-        let flipped = CGPoint(x: p.x, y: bounds.height - p.y)
+        let point = convert(event.locationInWindow, from: nil)
+        let flipped = CGPoint(x: point.x, y: bounds.height - point.y)
         onMouseButton?(.right, true, flipped)
     }
 
     override func rightMouseUp(with event: NSEvent) {
         super.rightMouseUp(with: event)
-        let p = convert(event.locationInWindow, from: nil)
-        let flipped = CGPoint(x: p.x, y: bounds.height - p.y)
+        let point = convert(event.locationInWindow, from: nil)
+        let flipped = CGPoint(x: point.x, y: bounds.height - point.y)
         onMouseButton?(.right, false, flipped)
     }
 
     override func otherMouseDown(with event: NSEvent) {
         super.otherMouseDown(with: event)
         guard event.buttonNumber == 2 else { return }
-        let p = convert(event.locationInWindow, from: nil)
-        let flipped = CGPoint(x: p.x, y: bounds.height - p.y)
+        let point = convert(event.locationInWindow, from: nil)
+        let flipped = CGPoint(x: point.x, y: bounds.height - point.y)
         onMouseButton?(.middle, true, flipped)
     }
 
     override func otherMouseUp(with event: NSEvent) {
         super.otherMouseUp(with: event)
         guard event.buttonNumber == 2 else { return }
-        let p = convert(event.locationInWindow, from: nil)
-        let flipped = CGPoint(x: p.x, y: bounds.height - p.y)
+        let point = convert(event.locationInWindow, from: nil)
+        let flipped = CGPoint(x: point.x, y: bounds.height - point.y)
         onMouseButton?(.middle, false, flipped)
     }
 
@@ -412,8 +420,8 @@ final class TrackingContainerView: NSView {
     }
 
     private func emitMouseMove(with event: NSEvent) {
-        let p = convert(event.locationInWindow, from: nil)
-        let flipped = CGPoint(x: p.x, y: bounds.height - p.y)
+        let point = convert(event.locationInWindow, from: nil)
+        let flipped = CGPoint(x: point.x, y: bounds.height - point.y)
         let delta = CGSize(width: event.deltaX, height: -event.deltaY)
         onMouseMove?(flipped, delta)
     }

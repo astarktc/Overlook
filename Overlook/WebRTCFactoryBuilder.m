@@ -1,10 +1,12 @@
 #import "WebRTCFactoryBuilder.h"
 
+#import "OverlookVideoDecoderFactory.h"
+
 @implementation WebRTCFactoryBuilder
 
 + (RTCPeerConnectionFactory *)makeFactoryWithAudioDevice:(id<RTCAudioDevice>)audioDevice {
     RTCDefaultVideoEncoderFactory *encoderFactory = [[RTCDefaultVideoEncoderFactory alloc] init];
-    RTCDefaultVideoDecoderFactory *decoderFactory = [[RTCDefaultVideoDecoderFactory alloc] init];
+    OverlookVideoDecoderFactory *decoderFactory = [[OverlookVideoDecoderFactory alloc] init];
 
     if (audioDevice != nil) {
         return [[RTCPeerConnectionFactory alloc] initWithEncoderFactory:encoderFactory

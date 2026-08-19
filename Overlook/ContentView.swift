@@ -1,7 +1,9 @@
+// swiftlint:disable file_length
 import SwiftUI
 import Foundation
 import AppKit
 
+// swiftlint:disable:next type_body_length
 struct ContentView: View {
     @EnvironmentObject var webRTCManager: WebRTCManager
     @EnvironmentObject var inputManager: InputManager
@@ -31,6 +33,12 @@ struct ContentView: View {
     @State private var showingConnections = false
     @State private var didAutoOpenConnections = false
 
+    /// Ticket 03: the settings panel is unmounted while closed, so its survivable state (loaded
+    /// config, keymaps, streamer state, section expansion, drafts) is owned here instead.
+    /// `ConnectionsPopoverView` needs no equivalent: its device list comes from
+    /// `KVMDeviceManager` and its selection is already a `ContentView` binding.
+    @StateObject private var settingsPanelModel = WebUISettingsPanelModel()
+
     @State private var pausedCaptureKeyboardWasEnabled: Bool?
     @State private var pausedCaptureMouseWasEnabled: Bool?
     @State private var isInputCapturePausedForUI: Bool = false
@@ -54,6 +62,15 @@ struct ContentView: View {
         }
     }
 
+    /// The window title: app name, device, connection state, guest resolution — and nothing
+    /// that ticks. Ticket 04 removed the live kbps/fps half (and with it the only telemetry
+    /// observer that fed window chrome), so the titlebar + unified toolbar no longer relayout
+    /// ~1–2×/s. Resolution stays because it changes at connection-level frequency only: it
+    /// arrives with the first frame and again on a guest mode change (`WebRTCManager` assigns
+    /// `videoSize` only when the size actually differs).
+    ///
+    /// This is a plain value; `applyWindowTitle(_:)` is the only thing that writes it to the
+    /// window (see `.onChange(of: windowTitle, initial: true)` below).
     private var windowTitle: String {
         let device = kvmDeviceManager.connectedDevice
 
@@ -82,21 +99,24 @@ struct ContentView: View {
             resolution = "—"
         }
 
-        let kbps: String
-        if let value = webRTCManager.inboundVideoKbps {
-            kbps = "\(value) kbps"
-        } else {
-            kbps = "— kbps"
-        }
+        return "Overlook - \(deviceLabel) / \(connectionState) / \(resolution)"
+    }
 
-        let fps: String
-        if let value = webRTCManager.inboundFps {
-            fps = "\(Int(value.rounded())) fps dynamic"
-        } else {
-            fps = "— fps dynamic"
-        }
-
-        return "Overlook - \(deviceLabel) / \(connectionState) / \(resolution) / \(kbps) / \(fps)"
+    /// Ticket 04: the single owner of `window.title`.
+    ///
+    /// Called only from the two `onChange` hooks below (title value changed, or the window
+    /// reference arrived), never from an `NSViewRepresentable.updateNSView`, so a SwiftUI pass
+    /// cannot mutate window chrome as a side effect. Writes synchronously on the current
+    /// runloop turn — no `DispatchQueue.main.async` hop — and compares first, so a pass that
+    /// recomputes the same string touches AppKit not at all.
+    ///
+    /// `titleVisibility` / `toolbar.isVisible` are deliberately *not* touched here: their sole
+    /// owner is `WindowAspectRatioSetter.Coordinator`'s fullscreen chrome logic.
+    @MainActor
+    private func applyWindowTitle(_ title: String) {
+        guard let window = windowRef else { return }
+        guard window.title != title else { return }
+        window.title = title
     }
 
     private func applyAppAppearance() {
@@ -217,68 +237,82 @@ struct ContentView: View {
                     }
             }
 
-            WebUISettingsPanel(isPresented: $showingSettings)
-                .frame(width: 360)
-                .offset(x: showingSettings ? 0 : 360)
-                .animation(Animation.easeInOut(duration: 0.2), value: showingSettings)
-                .allowsHitTesting(showingSettings)
-
-            VStack(spacing: 0) {
-                ConnectionsPopoverView(
-                    selectedDevice: $selectedDevice,
-                    isConnected: isConnected,
-                    isScanning: kvmDeviceManager.isScanning,
-                    devices: kvmDeviceManager.availableDevices,
-                    connectedDeviceName: kvmDeviceManager.connectedDevice?.name,
-                    latency: webRTCManager.latency,
-                    videoSize: webRTCManager.videoSize,
-                    inboundVideoKbps: webRTCManager.inboundVideoKbps,
-                    inboundFps: webRTCManager.inboundFps,
-                    inboundVideoPlayoutDelayMs: webRTCManager.inboundVideoPlayoutDelayMs,
-                    inboundVideoJitterMs: webRTCManager.inboundVideoJitterMs,
-                    inboundVideoDecodeMs: webRTCManager.inboundVideoDecodeMs,
-                    inboundVideoPacketsLost: webRTCManager.inboundVideoPacketsLost,
-                    iceCurrentRoundTripTimeMs: webRTCManager.iceCurrentRoundTripTimeMs,
-                    inboundAudioKbps: webRTCManager.inboundAudioKbps,
-                    inboundAudioPlayoutDelayMs: webRTCManager.inboundAudioPlayoutDelayMs,
-                    inboundAudioJitterMs: webRTCManager.inboundAudioJitterMs,
-                    inboundAudioPacketsLost: webRTCManager.inboundAudioPacketsLost,
-                    audioIceCurrentRoundTripTimeMs: webRTCManager.audioIceCurrentRoundTripTimeMs,
-                    onScan: {
-                        kvmDeviceManager.scanForDevices()
-                    },
-                    onManualConnect: {
-                        showingManualConnect = true
-                    },
-                    onToggleConnection: {
-                        toggleConnection()
-                    },
-                    onForgetSelectedDevice: {
-                        guard let device = selectedDevice else { return }
-                        guard device.id.hasPrefix("saved-") else { return }
-                        kvmDeviceManager.forgetDevice(device)
-                        selectedDevice = nil
-                    }
-                )
-                .frame(width: 360)
-                .background(.ultraThinMaterial)
-                .padding(.top, 8)
-
-                Spacer(minLength: 0)
+            if showingSettings {
+                WebUISettingsPanel(isPresented: $showingSettings, model: settingsPanelModel)
+                    .frame(width: 360)
+                    .transition(.move(edge: .trailing))
             }
-            .frame(maxHeight: .infinity)
-            .offset(x: showingConnections ? 0 : 360)
-            .animation(.easeInOut(duration: 0.2), value: showingConnections)
-            .allowsHitTesting(showingConnections)
+
+            if showingConnections {
+                VStack(spacing: 0) {
+                    ConnectionsPopoverView(
+                        selectedDevice: $selectedDevice,
+                        isConnected: isConnected,
+                        isScanning: kvmDeviceManager.isScanning,
+                        devices: kvmDeviceManager.availableDevices,
+                        connectedDeviceName: kvmDeviceManager.connectedDevice?.name,
+                        videoSize: webRTCManager.videoSize,
+                        onScan: {
+                            kvmDeviceManager.scanForDevices()
+                        },
+                        onManualConnect: {
+                            showingManualConnect = true
+                        },
+                        onToggleConnection: {
+                            toggleConnection()
+                        },
+                        onForgetSelectedDevice: {
+                            guard let device = selectedDevice else { return }
+                            guard device.id.hasPrefix("saved-") else { return }
+                            kvmDeviceManager.forgetDevice(device)
+                            selectedDevice = nil
+                        }
+                    )
+                    .frame(width: 360)
+                    .background(.ultraThinMaterial)
+                    .padding(.top, 8)
+
+                    Spacer(minLength: 0)
+                }
+                .frame(maxHeight: .infinity)
+                .transition(.move(edge: .trailing))
+            }
+        }
+        // Ticket 03: both panels are conditionally mounted, so the slide-in/out is driven by these
+        // container-level animations plus each panel's `.transition(.move(edge: .trailing))`.
+        // This also covers the call sites that flip the flags without `withAnimation`.
+        .animation(.easeInOut(duration: 0.2), value: showingSettings)
+        .animation(.easeInOut(duration: 0.2), value: showingConnections)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            StatusBarView(
+                deviceName: kvmDeviceManager.connectedDevice?.name ?? selectedDevice?.name ?? "No Device",
+                isConnected: webRTCManager.isConnected,
+                negotiatedCodec: webRTCManager.negotiatedCodec
+            )
         }
         .background(WindowAspectRatioSetter(videoSize: webRTCManager.videoSize))
-        .background(WindowTitleSetter(title: windowTitle))
         .background(WindowReferenceSetter(window: $windowRef))
         .preferredColorScheme(preferredColorScheme)
         .onAppear {
             applyAppAppearance()
             inputManager.setup(with: webRTCManager)
             inputManager.setGLKVMClient(kvmDeviceManager.glkvmClient)
+
+            // Issue 10: pin the device encoder's format via the authenticated
+            // kvmd API before each video watch request, so the encoder always
+            // matches the SDP. Reads glkvmClient at call time (the client is
+            // replaced on each device connect). Left as-set on disconnect by
+            // design — see the issue for the writer-conflict discussion.
+            webRTCManager.encoderFormatPinner = { [weak kvmDeviceManager] videoFormat in
+                guard let client = kvmDeviceManager?.glkvmClient else { return false }
+                do {
+                    try await client.setStreamerParams(videoFormat.streamerParams)
+                    return true
+                } catch {
+                    NSLog("[Overlook] set_params video_format failed: %@", String(describing: error))
+                    return false
+                }
+            }
 
             updateInputCaptureForUIOverlays()
 
@@ -296,6 +330,15 @@ struct ContentView: View {
         .onChange(of: windowRef) { _, newValue in
             isFullscreen = newValue?.styleMask.contains(.fullScreen) ?? false
             showFullscreenControls = false
+            // Ticket 04: the window arrives after the first body pass, so this is where the
+            // initial title lands.
+            applyWindowTitle(windowTitle)
+        }
+        // Ticket 04: the only trigger for a title write. `windowTitle` reads connection state,
+        // the connected device and `videoSize` — all of which change at connect/disconnect/mode
+        // frequency — so this fires a handful of times per session, not once per second.
+        .onChange(of: windowTitle, initial: true) { _, newValue in
+            applyWindowTitle(newValue)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { note in
             guard let window = note.object as? NSWindow else { return }
@@ -599,6 +642,7 @@ private struct WindowReferenceSetter: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
+        // swiftlint:disable:next identifier_name
         guard let w = nsView.window else { return }
         if window !== w {
             DispatchQueue.main.async {
@@ -625,9 +669,13 @@ private struct WindowAspectRatioSetter: NSViewRepresentable {
         if context.coordinator.didConfigureWindow == false {
             context.coordinator.didConfigureWindow = true
             let coordinator = context.coordinator
+            // One-time window configuration. The async hop is genuinely needed: this runs inside
+            // a SwiftUI update pass, and mutating `styleMask` (a geometry-affecting change)
+            // synchronously from there re-enters layout. It happens once per window, not per
+            // pass, so it is not a churn source. Compare-before-write anyway.
             DispatchQueue.main.async {
-                window.titlebarAppearsTransparent = false
-                window.styleMask.remove(.fullSizeContentView)
+                Coordinator.setTitlebarAppearsTransparent(false, on: window)
+                Coordinator.setFullSizeContentView(false, on: window)
                 coordinator.attach(to: window)
             }
         }
@@ -704,36 +752,74 @@ private struct WindowAspectRatioSetter: NSViewRepresentable {
             }
         }
 
+        /// Ticket 04: this coordinator is the *only* owner of `titleVisibility`,
+        /// `toolbar.isVisible`, `titlebarAppearsTransparent`, `.fullSizeContentView` and
+        /// `titlebarSeparatorStyle`. `WindowTitleSetter` used to also write `titleVisibility`
+        /// unconditionally from every SwiftUI pass; it is gone.
         private func applyFullscreenChrome(window: NSWindow) {
-            window.titlebarAppearsTransparent = true
-            window.titleVisibility = .hidden
-            window.styleMask.insert(.fullSizeContentView)
-            window.toolbar?.isVisible = false
+            Coordinator.setTitlebarAppearsTransparent(true, on: window)
+            Coordinator.setTitleVisibility(.hidden, on: window)
+            Coordinator.setFullSizeContentView(true, on: window)
+            Coordinator.setToolbarVisible(false, on: window)
             if #available(macOS 11.0, *) {
-                window.titlebarSeparatorStyle = .none
+                Coordinator.setTitlebarSeparatorStyle(.none, on: window)
             }
         }
 
         private func restoreWindowedChrome(window: NSWindow) {
             if let stored = storedWindowedTitlebarAppearsTransparent {
-                window.titlebarAppearsTransparent = stored
+                Coordinator.setTitlebarAppearsTransparent(stored, on: window)
             }
             if let hadFullSize = storedWindowedStyleMaskHadFullSizeContentView {
-                if hadFullSize {
-                    window.styleMask.insert(.fullSizeContentView)
-                } else {
-                    window.styleMask.remove(.fullSizeContentView)
-                }
+                Coordinator.setFullSizeContentView(hadFullSize, on: window)
             }
             if let stored = storedWindowedTitleVisibility {
-                window.titleVisibility = stored
+                Coordinator.setTitleVisibility(stored, on: window)
             }
             if let stored = storedWindowedToolbarIsVisible {
-                window.toolbar?.isVisible = stored
+                Coordinator.setToolbarVisible(stored, on: window)
             }
             if #available(macOS 11.0, *) {
-                window.titlebarSeparatorStyle = .automatic
+                Coordinator.setTitlebarSeparatorStyle(.automatic, on: window)
             }
+        }
+
+        // MARK: - Compare-before-write chrome primitives
+        //
+        // Every chrome write in this file goes through one of these, so a no-op apply/restore
+        // (or a re-entered configure) touches AppKit not at all and cannot invalidate geometry.
+
+        static func setTitlebarAppearsTransparent(_ value: Bool, on window: NSWindow) {
+            guard window.titlebarAppearsTransparent != value else { return }
+            window.titlebarAppearsTransparent = value
+        }
+
+        static func setTitleVisibility(_ value: NSWindow.TitleVisibility, on window: NSWindow) {
+            guard window.titleVisibility != value else { return }
+            window.titleVisibility = value
+        }
+
+        static func setFullSizeContentView(_ present: Bool, on window: NSWindow) {
+            guard window.styleMask.contains(.fullSizeContentView) != present else { return }
+            if present {
+                window.styleMask.insert(.fullSizeContentView)
+            } else {
+                window.styleMask.remove(.fullSizeContentView)
+            }
+        }
+
+        static func setToolbarVisible(_ value: Bool, on window: NSWindow) {
+            guard let toolbar = window.toolbar, toolbar.isVisible != value else { return }
+            toolbar.isVisible = value
+        }
+
+        @available(macOS 11.0, *)
+        static func setTitlebarSeparatorStyle(
+            _ value: NSTitlebarSeparatorStyle,
+            on window: NSWindow
+        ) {
+            guard window.titlebarSeparatorStyle != value else { return }
+            window.titlebarSeparatorStyle = value
         }
 
         private func adjustFrameToVideoAspect(window: NSWindow) {
@@ -828,25 +914,9 @@ extension WindowAspectRatioSetter.Coordinator: NSWindowDelegate {
     }
 }
 
-private struct WindowTitleSetter: NSViewRepresentable {
-    let title: String
-
-    func makeNSView(context: Context) -> NSView {
-        NSView(frame: .zero)
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        guard let window = nsView.window else { return }
-        DispatchQueue.main.async {
-            if window.title != title {
-                window.title = title
-            }
-            if window.styleMask.contains(.fullScreen) == false {
-                window.titleVisibility = .visible
-            }
-        }
-    }
-}
+// Ticket 04: `WindowTitleTelemetryHost` and `WindowTitleSetter` were deleted here. The title no
+// longer carries telemetry (so no window-chrome view observes `StreamTelemetryModel` at all), and
+// it is applied by `ContentView.applyWindowTitle(_:)` instead of by a per-pass `updateNSView`.
 
 struct ConnectionsPopoverView: View {
     @Binding var selectedDevice: KVMDevice?
@@ -855,22 +925,11 @@ struct ConnectionsPopoverView: View {
     let isScanning: Bool
     let devices: [KVMDevice]
     let connectedDeviceName: String?
-    let latency: Int
 
+    /// Guest resolution, forwarded to the stats section. Telemetry itself is not passed in:
+    /// `ConnectionLatencyLabel` and `StreamStatsSection` observe it themselves, so this body
+    /// does not re-evaluate on every tick.
     let videoSize: CGSize?
-    let inboundVideoKbps: Int?
-    let inboundFps: Double?
-    let inboundVideoPlayoutDelayMs: Int?
-    let inboundVideoJitterMs: Int?
-    let inboundVideoDecodeMs: Int?
-    let inboundVideoPacketsLost: Int?
-    let iceCurrentRoundTripTimeMs: Int?
-
-    let inboundAudioKbps: Int?
-    let inboundAudioPlayoutDelayMs: Int?
-    let inboundAudioJitterMs: Int?
-    let inboundAudioPacketsLost: Int?
-    let audioIceCurrentRoundTripTimeMs: Int?
 
     let onScan: () -> Void
     let onManualConnect: () -> Void
@@ -878,25 +937,6 @@ struct ConnectionsPopoverView: View {
     let onForgetSelectedDevice: () -> Void
 
     var body: some View {
-        let resolutionText: String = {
-            guard let videoSize, videoSize.width > 0, videoSize.height > 0 else { return "—" }
-            return "\(Int(videoSize.width))x\(Int(videoSize.height))"
-        }()
-
-        let kbpsText = inboundVideoKbps.map { "\($0) kbps" } ?? "— kbps"
-        let fpsText = inboundFps.map { "\(Int($0.rounded())) fps" } ?? "— fps"
-        let playoutDelayText = inboundVideoPlayoutDelayMs.map { "\($0) ms" } ?? "—"
-        let jitterText = inboundVideoJitterMs.map { "\($0) ms" } ?? "—"
-        let decodeText = inboundVideoDecodeMs.map { "\($0) ms" } ?? "—"
-        let lossText = inboundVideoPacketsLost.map { String($0) } ?? "—"
-        let rttText = iceCurrentRoundTripTimeMs.map { "\($0) ms" } ?? "—"
-
-        let audioKbpsText = inboundAudioKbps.map { "\($0) kbps" } ?? "— kbps"
-        let audioPlayoutDelayText = inboundAudioPlayoutDelayMs.map { "\($0) ms" } ?? "—"
-        let audioJitterText = inboundAudioJitterMs.map { "\($0) ms" } ?? "—"
-        let audioLossText = inboundAudioPacketsLost.map { String($0) } ?? "—"
-        let audioRttText = audioIceCurrentRoundTripTimeMs.map { "\($0) ms" } ?? "—"
-
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Connections")
@@ -947,126 +987,22 @@ struct ConnectionsPopoverView: View {
 
                     Spacer()
 
-                    Text("Latency: \(latency)ms")
-                        .font(.caption)
+                    ConnectionLatencyLabel()
                         .foregroundColor(.secondary)
                 }
             }
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text("WebRTC")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-
-                HStack {
-                    Text("Video")
-                        .font(.caption)
-                    Spacer()
-                    Text("\(resolutionText) · \(fpsText) · \(kbpsText)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                HStack {
-                    Text("Playout")
-                        .font(.caption)
-                    Spacer()
-                    Text(playoutDelayText)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                HStack {
-                    Text("Jitter")
-                        .font(.caption)
-                    Spacer()
-                    Text(jitterText)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                HStack {
-                    Text("Decode")
-                        .font(.caption)
-                    Spacer()
-                    Text(decodeText)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                HStack {
-                    Text("Lost")
-                        .font(.caption)
-                    Spacer()
-                    Text(lossText)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                HStack {
-                    Text("ICE RTT")
-                        .font(.caption)
-                    Spacer()
-                    Text(rttText)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                if inboundAudioKbps != nil || inboundAudioJitterMs != nil || inboundAudioPacketsLost != nil || audioIceCurrentRoundTripTimeMs != nil {
-                    HStack {
-                        Text("Audio")
-                            .font(.caption)
-                        Spacer()
-                        Text(audioKbpsText)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-
-                    HStack {
-                        Text("Audio Playout")
-                            .font(.caption)
-                        Spacer()
-                        Text(audioPlayoutDelayText)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-
-                    HStack {
-                        Text("Audio Jitter")
-                            .font(.caption)
-                        Spacer()
-                        Text(audioJitterText)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-
-                    HStack {
-                        Text("Audio Lost")
-                            .font(.caption)
-                        Spacer()
-                        Text(audioLossText)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-
-                    HStack {
-                        Text("Audio ICE RTT")
-                            .font(.caption)
-                        Spacer()
-                        Text(audioRttText)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
+            StreamStatsSection(videoSize: videoSize)
         }
         .padding(14)
     }
 }
 
 #Preview {
+    let webRTCManager = WebRTCManager()
     ContentView()
-        .environmentObject(WebRTCManager())
+        .environmentObject(webRTCManager)
+        .environmentObject(webRTCManager.telemetry)
         .environmentObject(InputManager())
         .environmentObject(OCRManager())
         .environmentObject(KVMDeviceManager())

@@ -29,6 +29,50 @@
 		0100001D /* CoreAudioDevices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200001C /* CoreAudioDevices.swift */; };
 		0100001E /* WebRTCAudioDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200001D /* WebRTCAudioDevice.swift */; };
 		0100001F /* WebRTCFactoryBuilder.m in Sources */ = {isa = PBXBuildFile; fileRef = 02000021 /* WebRTCFactoryBuilder.m */; };
+		01000020 /* OverlookTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000022 /* OverlookTests.swift */; };
+		01000021 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 02000023 /* README.md */; };
+		01000022 /* lab28-h265-sample.bin in Resources */ = {isa = PBXBuildFile; fileRef = 02000024 /* lab28-h265-sample.bin */; };
+		01000023 /* lab28-h265-rejoin.bin in Resources */ = {isa = PBXBuildFile; fileRef = 02000025 /* lab28-h265-rejoin.bin */; };
+		01000024 /* CodecSelectionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000026 /* CodecSelectionPolicy.swift */; };
+		01000025 /* CodecSelectionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000026 /* CodecSelectionPolicy.swift */; };
+		01000026 /* CodecSelectionPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000027 /* CodecSelectionPolicyTests.swift */; };
+		01000027 /* H265NaluParser.m in Sources */ = {isa = PBXBuildFile; fileRef = 02000029 /* H265NaluParser.m */; };
+		01000028 /* H265NaluParser.m in Sources */ = {isa = PBXBuildFile; fileRef = 02000029 /* H265NaluParser.m */; };
+		01000029 /* RTCVideoDecoderH265.m in Sources */ = {isa = PBXBuildFile; fileRef = 0200002B /* RTCVideoDecoderH265.m */; };
+		0100002A /* RTCVideoDecoderH265.m in Sources */ = {isa = PBXBuildFile; fileRef = 0200002B /* RTCVideoDecoderH265.m */; };
+		0100002B /* OverlookVideoDecoderFactory.m in Sources */ = {isa = PBXBuildFile; fileRef = 0200002D /* OverlookVideoDecoderFactory.m */; };
+		0100002C /* OverlookVideoDecoderFactory.m in Sources */ = {isa = PBXBuildFile; fileRef = 0200002D /* OverlookVideoDecoderFactory.m */; };
+		0100002D /* H265DecoderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200002F /* H265DecoderTests.swift */; };
+		0100002E /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = 14000001 /* WebRTC */; };
+		0100002F /* VideoToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 02000030 /* VideoToolbox.framework */; };
+		01000030 /* CoreMedia.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 02000031 /* CoreMedia.framework */; };
+		01000031 /* VideoToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 02000030 /* VideoToolbox.framework */; };
+		01000032 /* CoreMedia.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 02000031 /* CoreMedia.framework */; };
+		01000033 /* H265DecoderTestSupport.m in Sources */ = {isa = PBXBuildFile; fileRef = 02000032 /* H265DecoderTestSupport.m */; };
+		01000034 /* SDPOfferParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000033 /* SDPOfferParser.swift */; };
+		01000035 /* SDPOfferParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000033 /* SDPOfferParser.swift */; };
+		01000036 /* SDPOfferParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000034 /* SDPOfferParserTests.swift */; };
+		01000039 /* WebRTCBinaryH265SupportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000036 /* WebRTCBinaryH265SupportTests.swift */; };
+		0100003A /* H265LiveWireDiagnosticTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000037 /* H265LiveWireDiagnosticTests.swift */; };
+		0100003B /* WebRTCManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000006 /* WebRTCManager.swift */; };
+		0100003C /* KVMDeviceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000009 /* KVMDeviceManager.swift */; };
+		0100003D /* GLKVMClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000015 /* GLKVMClient.swift */; };
+		0100003E /* JSONValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000011 /* JSONValue.swift */; };
+		0100003F /* WebRTCAudioDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200001D /* WebRTCAudioDevice.swift */; };
+		01000040 /* CoreAudioDevices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200001C /* CoreAudioDevices.swift */; };
+		01000041 /* WebRTCFactoryBuilder.m in Sources */ = {isa = PBXBuildFile; fileRef = 02000021 /* WebRTCFactoryBuilder.m */; };
+		01000037 /* CodecPreferenceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000035 /* CodecPreferenceStore.swift */; };
+		01000038 /* CodecPreferenceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000035 /* CodecPreferenceStore.swift */; };
+		01000044 /* StreamTelemetry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000039 /* StreamTelemetry.swift */; };
+		01000045 /* StreamTelemetry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000039 /* StreamTelemetry.swift */; };
+		01000046 /* StreamTelemetryViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200003A /* StreamTelemetryViews.swift */; };
+		01000047 /* WebUISettingsPanelModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200003B /* WebUISettingsPanelModel.swift */; };
+		01000048 /* EDIDCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000048 /* EDIDCatalog.swift */; };
+		01000049 /* WebUISettingsActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000049 /* WebUISettingsActions.swift */; };
+		0100004A /* WebUISettingsSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200004A /* WebUISettingsSections.swift */; };
+		0100004B /* VideoRenderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200004B /* VideoRenderView.swift */; };
+		0100004C /* VideoRenderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200004B /* VideoRenderView.swift */; };
+		0100004D /* VideoRenderViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200004C /* VideoRenderViewTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -57,7 +101,38 @@
 		0200001F /* Overlook-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Overlook-Bridging-Header.h"; sourceTree = "<group>"; };
 		02000020 /* WebRTCFactoryBuilder.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = WebRTCFactoryBuilder.h; sourceTree = "<group>"; };
 		02000021 /* WebRTCFactoryBuilder.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = WebRTCFactoryBuilder.m; sourceTree = "<group>"; };
+		02000022 /* OverlookTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlookTests.swift; sourceTree = "<group>"; };
+		02000023 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		02000024 /* lab28-h265-sample.bin */ = {isa = PBXFileReference; lastKnownFileType = file; path = "lab28-h265-sample.bin"; sourceTree = "<group>"; };
+		02000025 /* lab28-h265-rejoin.bin */ = {isa = PBXFileReference; lastKnownFileType = file; path = "lab28-h265-rejoin.bin"; sourceTree = "<group>"; };
+		02000026 /* CodecSelectionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodecSelectionPolicy.swift; sourceTree = "<group>"; };
+		02000027 /* CodecSelectionPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodecSelectionPolicyTests.swift; sourceTree = "<group>"; };
+		02000028 /* H265NaluParser.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = H265NaluParser.h; sourceTree = "<group>"; };
+		02000029 /* H265NaluParser.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = H265NaluParser.m; sourceTree = "<group>"; };
+		0200002A /* RTCVideoDecoderH265.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RTCVideoDecoderH265.h; sourceTree = "<group>"; };
+		0200002B /* RTCVideoDecoderH265.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RTCVideoDecoderH265.m; sourceTree = "<group>"; };
+		0200002C /* OverlookVideoDecoderFactory.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = OverlookVideoDecoderFactory.h; sourceTree = "<group>"; };
+		0200002D /* OverlookVideoDecoderFactory.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = OverlookVideoDecoderFactory.m; sourceTree = "<group>"; };
+		0200002E /* OverlookTests-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "OverlookTests-Bridging-Header.h"; sourceTree = "<group>"; };
+		0200002F /* H265DecoderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = H265DecoderTests.swift; sourceTree = "<group>"; };
+		02000030 /* VideoToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = VideoToolbox.framework; path = System/Library/Frameworks/VideoToolbox.framework; sourceTree = SDKROOT; };
+		02000031 /* CoreMedia.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreMedia.framework; path = System/Library/Frameworks/CoreMedia.framework; sourceTree = SDKROOT; };
+		02000032 /* H265DecoderTestSupport.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = H265DecoderTestSupport.m; sourceTree = "<group>"; };
+		02000033 /* SDPOfferParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SDPOfferParser.swift; sourceTree = "<group>"; };
+		02000034 /* SDPOfferParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SDPOfferParserTests.swift; sourceTree = "<group>"; };
+		02000036 /* WebRTCBinaryH265SupportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCBinaryH265SupportTests.swift; sourceTree = "<group>"; };
+		02000037 /* H265LiveWireDiagnosticTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = H265LiveWireDiagnosticTests.swift; sourceTree = "<group>"; };
+		02000035 /* CodecPreferenceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodecPreferenceStore.swift; sourceTree = "<group>"; };
+		02000039 /* StreamTelemetry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamTelemetry.swift; sourceTree = "<group>"; };
+		0200003A /* StreamTelemetryViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamTelemetryViews.swift; sourceTree = "<group>"; };
+		0200003B /* WebUISettingsPanelModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebUISettingsPanelModel.swift; sourceTree = "<group>"; };
+		02000048 /* EDIDCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EDIDCatalog.swift; sourceTree = "<group>"; };
+		02000049 /* WebUISettingsActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebUISettingsActions.swift; sourceTree = "<group>"; };
+		0200004A /* WebUISettingsSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebUISettingsSections.swift; sourceTree = "<group>"; };
+		0200004B /* VideoRenderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoRenderView.swift; sourceTree = "<group>"; };
+		0200004C /* VideoRenderViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoRenderViewTests.swift; sourceTree = "<group>"; };
 		03000001 /* Overlook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Overlook.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		03000002 /* OverlookTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OverlookTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -66,6 +141,18 @@
 			buildActionMask = 2147483647;
 			files = (
 				01000016 /* WebRTC in Frameworks */,
+				0100002F /* VideoToolbox.framework in Frameworks */,
+				01000030 /* CoreMedia.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		04000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0100002E /* WebRTC in Frameworks */,
+				01000031 /* VideoToolbox.framework in Frameworks */,
+				01000032 /* CoreMedia.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -76,6 +163,8 @@
 			isa = PBXGroup;
 			children = (
 				05000002 /* Overlook */,
+				05000004 /* OverlookTests */,
+				05000006 /* Frameworks */,
 				05000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -84,10 +173,20 @@
 			isa = PBXGroup;
 			children = (
 				02000001 /* OverlookApp.swift */,
+				02000026 /* CodecSelectionPolicy.swift */,
+				02000035 /* CodecPreferenceStore.swift */,
+				02000033 /* SDPOfferParser.swift */,
 				02000002 /* ContentView.swift */,
 				02000019 /* ContentControlBar.swift */,
 				0200001A /* VideoSurfaceView.swift */,
+				0200004B /* VideoRenderView.swift */,
 				0200001B /* StatusBarView.swift */,
+				0200003A /* StreamTelemetryViews.swift */,
+				0200003B /* WebUISettingsPanelModel.swift */,
+				02000048 /* EDIDCatalog.swift */,
+				02000049 /* WebUISettingsActions.swift */,
+				0200004A /* WebUISettingsSections.swift */,
+				02000039 /* StreamTelemetry.swift */,
 				02000017 /* OCRViews.swift */,
 				02000018 /* ConnectSheets.swift */,
 				02000016 /* WebUISettingsPanel.swift */,
@@ -97,6 +196,12 @@
 				0200001D /* WebRTCAudioDevice.swift */,
 				02000021 /* WebRTCFactoryBuilder.m */,
 				02000020 /* WebRTCFactoryBuilder.h */,
+				02000029 /* H265NaluParser.m */,
+				02000028 /* H265NaluParser.h */,
+				0200002B /* RTCVideoDecoderH265.m */,
+				0200002A /* RTCVideoDecoderH265.h */,
+				0200002D /* OverlookVideoDecoderFactory.m */,
+				0200002C /* OverlookVideoDecoderFactory.h */,
 				0200001E /* RTCAudioDeviceShim.h */,
 				0200001F /* Overlook-Bridging-Header.h */,
 				02000007 /* InputManager.swift */,
@@ -116,8 +221,45 @@
 			isa = PBXGroup;
 			children = (
 				03000001 /* Overlook.app */,
+				03000002 /* OverlookTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		05000004 /* OverlookTests */ = {
+			isa = PBXGroup;
+			children = (
+				02000022 /* OverlookTests.swift */,
+				02000027 /* CodecSelectionPolicyTests.swift */,
+				0200004C /* VideoRenderViewTests.swift */,
+				02000034 /* SDPOfferParserTests.swift */,
+				02000036 /* WebRTCBinaryH265SupportTests.swift */,
+				02000037 /* H265LiveWireDiagnosticTests.swift */,
+				0200002F /* H265DecoderTests.swift */,
+				02000032 /* H265DecoderTestSupport.m */,
+				0200002E /* OverlookTests-Bridging-Header.h */,
+				05000005 /* Fixtures */,
+			);
+			path = OverlookTests;
+			sourceTree = "<group>";
+		};
+		05000005 /* Fixtures */ = {
+			isa = PBXGroup;
+			children = (
+				02000023 /* README.md */,
+				02000024 /* lab28-h265-sample.bin */,
+				02000025 /* lab28-h265-rejoin.bin */,
+			);
+			path = Fixtures;
+			sourceTree = "<group>";
+		};
+		05000006 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				02000031 /* CoreMedia.framework */,
+				02000030 /* VideoToolbox.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -143,6 +285,26 @@
 			productReference = 03000001 /* Overlook.app */;
 			productType = "com.apple.product-type.application";
 		};
+		06000002 /* OverlookTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 07000002 /* Build configuration list for PBXNativeTarget "OverlookTests" */;
+			buildPhases = (
+				08000002 /* Sources */,
+				04000002 /* Frameworks */,
+				09000002 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = OverlookTests;
+			packageProductDependencies = (
+				14000001 /* WebRTC */,
+			);
+			productName = OverlookTests;
+			productReference = 03000002 /* OverlookTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -156,6 +318,9 @@
 				TargetAttributes = {
 					06000001 = {
 						CreatedOnToolsVersion = 15.0;
+					};
+					06000002 = {
+						CreatedOnToolsVersion = 26.6;
 					};
 				};
 			};
@@ -176,6 +341,7 @@
 			projectRoot = "";
 			targets = (
 				06000001 /* Overlook */,
+				06000002 /* OverlookTests */,
 			);
 		};
 /* End PBXProject section */
@@ -189,6 +355,16 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		09000002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				01000021 /* README.md in Resources */,
+				01000022 /* lab28-h265-sample.bin in Resources */,
+				01000023 /* lab28-h265-rejoin.bin in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -197,10 +373,20 @@
 			buildActionMask = 2147483647;
 			files = (
 				01000001 /* OverlookApp.swift in Sources */,
+				01000024 /* CodecSelectionPolicy.swift in Sources */,
+				01000037 /* CodecPreferenceStore.swift in Sources */,
+				01000034 /* SDPOfferParser.swift in Sources */,
 				01000002 /* ContentView.swift in Sources */,
 				0100001A /* ContentControlBar.swift in Sources */,
 				0100001B /* VideoSurfaceView.swift in Sources */,
+				0100004B /* VideoRenderView.swift in Sources */,
 				0100001C /* StatusBarView.swift in Sources */,
+				01000046 /* StreamTelemetryViews.swift in Sources */,
+				01000047 /* WebUISettingsPanelModel.swift in Sources */,
+				01000048 /* EDIDCatalog.swift in Sources */,
+				01000049 /* WebUISettingsActions.swift in Sources */,
+				0100004A /* WebUISettingsSections.swift in Sources */,
+				01000044 /* StreamTelemetry.swift in Sources */,
 				01000017 /* WebUISettingsPanel.swift in Sources */,
 				01000018 /* OCRViews.swift in Sources */,
 				01000019 /* ConnectSheets.swift in Sources */,
@@ -209,6 +395,9 @@
 				0100001D /* CoreAudioDevices.swift in Sources */,
 				0100001E /* WebRTCAudioDevice.swift in Sources */,
 				0100001F /* WebRTCFactoryBuilder.m in Sources */,
+				01000027 /* H265NaluParser.m in Sources */,
+				01000029 /* RTCVideoDecoderH265.m in Sources */,
+				0100002B /* OverlookVideoDecoderFactory.m in Sources */,
 				01000007 /* InputManager.swift in Sources */,
 				01000008 /* OCRManager.swift in Sources */,
 				01000009 /* KVMDeviceManager.swift in Sources */,
@@ -216,6 +405,36 @@
 				01000010 /* MenuBarAgent.swift in Sources */,
 				01000014 /* TailscaleManager.swift in Sources */,
 				01000011 /* JSONValue.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		08000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				01000020 /* OverlookTests.swift in Sources */,
+				01000025 /* CodecSelectionPolicy.swift in Sources */,
+				01000038 /* CodecPreferenceStore.swift in Sources */,
+				01000035 /* SDPOfferParser.swift in Sources */,
+				01000036 /* SDPOfferParserTests.swift in Sources */,
+				01000039 /* WebRTCBinaryH265SupportTests.swift in Sources */,
+				0100003A /* H265LiveWireDiagnosticTests.swift in Sources */,
+				0100003B /* WebRTCManager.swift in Sources */,
+				0100004C /* VideoRenderView.swift in Sources */,
+				0100004D /* VideoRenderViewTests.swift in Sources */,
+				01000045 /* StreamTelemetry.swift in Sources */,
+				0100003C /* KVMDeviceManager.swift in Sources */,
+				0100003D /* GLKVMClient.swift in Sources */,
+				0100003E /* JSONValue.swift in Sources */,
+				0100003F /* WebRTCAudioDevice.swift in Sources */,
+				01000040 /* CoreAudioDevices.swift in Sources */,
+				01000041 /* WebRTCFactoryBuilder.m in Sources */,
+				01000026 /* CodecSelectionPolicyTests.swift in Sources */,
+				01000028 /* H265NaluParser.m in Sources */,
+				0100002A /* RTCVideoDecoderH265.m in Sources */,
+				0100002C /* OverlookVideoDecoderFactory.m in Sources */,
+				0100002D /* H265DecoderTests.swift in Sources */,
+				01000033 /* H265DecoderTestSupport.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -359,6 +578,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Overlook/Info.plist;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Overlook needs microphone access to send audio to the remote device.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -394,6 +614,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Overlook/Info.plist;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Overlook needs microphone access to send audio to the remote device.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -414,6 +635,40 @@
 			};
 			name = Release;
 		};
+		12000005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.overlook.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_OBJC_BRIDGING_HEADER = "OverlookTests/OverlookTests-Bridging-Header.h";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		12000006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.overlook.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_OBJC_BRIDGING_HEADER = "OverlookTests/OverlookTests-Bridging-Header.h";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -422,6 +677,15 @@
 			buildConfigurations = (
 				12000003 /* Debug */,
 				12000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		07000002 /* Build configuration list for PBXNativeTarget "OverlookTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				12000005 /* Debug */,
+				12000006 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -442,8 +706,8 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/stasel/WebRTC";
 			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 109.0.1;
+				kind = exactVersion;
+				version = 150.0.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

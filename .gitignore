@@ -32,3 +32,13 @@ janus/
 # .swiftpm
 .build/
 
+
+# Pi/Claude conversation logs (local only)
+docs/conversation-logs/
+
+# Agent tool state
+.pi-subagents/
+.pi-lens/
+__pycache__/
+*.profraw
+build/

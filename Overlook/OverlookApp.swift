@@ -8,11 +8,14 @@ import Network
 @main
 struct OverlookApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    
+
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(appDelegate.webRTCManager)
+                // Telemetry is a separate observable so only the views that render stats
+                // re-evaluate when it ticks.
+                .environmentObject(appDelegate.webRTCManager.telemetry)
                 .environmentObject(appDelegate.inputManager)
                 .environmentObject(appDelegate.ocrManager)
                 .environmentObject(appDelegate.kvmDeviceManager)
@@ -58,6 +61,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        webRTCManager.disconnect()
         menuBarAgent?.cleanup()
         return .terminateNow
     }

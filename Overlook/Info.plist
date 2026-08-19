@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Partial Info.plist. GENERATE_INFOPLIST_FILE stays YES, so Xcode merges its
+  generated keys (LSMinimumSystemVersion, NSMicrophoneUsageDescription, bundle
+  identity, ...) into this file's contents at build time. Only keys that cannot
+  be expressed as INFOPLIST_KEY_* build settings belong here - NSAppTransportSecurity
+  is a dictionary, and INFOPLIST_KEY_* only supports scalars and string arrays.
+
+  Decision (deliberate, approved): blanket NSAllowsArbitraryLoads = true.
+  Overlook talks to GL.iNet Comet KVM devices over HTTPS with self-signed
+  certificates (CN "glkvm"), reached at Tailscale 100.x CGNAT addresses.
+  ATS rejects that handshake before our URLSession delegate can evaluate the
+  trust (NSURLErrorDomain -1200 / kCFStreamErrorCodeKey -9802).
+  NSAllowsLocalNetworking is NOT sufficient: it covers .local/link-local and
+  RFC 1918 private ranges only, and 100.64.0.0/10 (CGNAT, used by Tailscale)
+  is not among them. Certificate trust is instead enforced in
+  GLKVMClient.SessionDelegate.
+-->
+<plist version="1.0">
+<dict>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+</dict>
+</plist>
