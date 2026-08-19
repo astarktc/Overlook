@@ -12,33 +12,35 @@ import XCTest
 
 #if canImport(WebRTC)
 
+/// An IOSurface-backed NV12 buffer shaped like decoder output, shared by both test classes.
+private func makeNV12PixelBuffer(width: Int, height: Int) throws -> CVPixelBuffer {
+    var pixelBuffer: CVPixelBuffer?
+    let attributes: [CFString: Any] = [
+        kCVPixelBufferIOSurfacePropertiesKey: [:] as CFDictionary
+    ]
+    let status = CVPixelBufferCreate(
+        kCFAllocatorDefault,
+        width,
+        height,
+        kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
+        attributes as CFDictionary,
+        &pixelBuffer
+    )
+    return try XCTUnwrap(pixelBuffer, "CVPixelBufferCreate failed with \(status)")
+}
+
+private func makeFrameBuffer(width: Int = 320, height: Int = 240) throws -> RTCCVPixelBuffer {
+    RTCCVPixelBuffer(pixelBuffer: try makeNV12PixelBuffer(width: width, height: height))
+}
+
 /// Unit coverage for the seams of the `AVSampleBufferDisplayLayer` video renderer that do not
-/// need a live stream: the connection-generation guard, the fps/capture throttles, the format
-/// description cache, and the sample buffer handed to the display layer.
+/// need a live stream: the connection-generation guard, the fps/capture throttles and the
+/// coalescing OCR capture slot.
 ///
 /// Everything visual (does video actually appear, aspect, resolution change mid-stream,
 /// reconnect, fullscreen, OCR, immunity to a stalled main thread) needs a real device and is
 /// verified by hand.
 final class VideoRenderViewTests: XCTestCase {
-    // MARK: - Helpers
-
-    private func makeNV12PixelBuffer(width: Int, height: Int) throws -> CVPixelBuffer {
-        var pixelBuffer: CVPixelBuffer?
-        let attributes: [CFString: Any] = [
-            kCVPixelBufferIOSurfacePropertiesKey: [:] as CFDictionary
-        ]
-        let status = CVPixelBufferCreate(
-            kCFAllocatorDefault,
-            width,
-            height,
-            kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
-            attributes as CFDictionary,
-            &pixelBuffer
-        )
-        let buffer = try XCTUnwrap(pixelBuffer, "CVPixelBufferCreate failed with \(status)")
-        return buffer
-    }
-
     // MARK: - Generation guard
 
     func testAdmitFrameRejectsFramesFromASupersededConnection() {
@@ -179,6 +181,387 @@ final class VideoRenderViewTests: XCTestCase {
         XCTAssertNil(gate.recordFrame(at: 100.5), "...and its fps window starts over")
     }
 
+    // MARK: - OCR capture coalescing
+
+    func testCaptureSlotSchedulesOneDrainAndKeepsOnlyTheNewestFrame() throws {
+        let slot = VideoFrameCaptureSlot()
+        let first = try makeNV12PixelBuffer(width: 320, height: 240)
+        let second = try makeNV12PixelBuffer(width: 640, height: 480)
+
+        XCTAssertTrue(
+            slot.store(first, generation: 5),
+            "The first capture has to schedule the main-actor drain"
+        )
+        XCTAssertFalse(
+            slot.store(second, generation: 5),
+            "A drain is already scheduled: replace the slot instead of spawning another task"
+        )
+
+        let drained = try XCTUnwrap(slot.take())
+        XCTAssertTrue(
+            drained.pixelBuffer === second,
+            "OCR wants the newest frame; the superseded buffer must be released, not queued"
+        )
+        XCTAssertEqual(drained.generation, 5)
+        XCTAssertNil(slot.take(), "Nothing is left behind after a drain")
+
+        XCTAssertTrue(
+            slot.store(first, generation: 6),
+            "Once drained, the next capture schedules a fresh drain"
+        )
+    }
+
+    func testCaptureSlotClearReleasesAFrameThatNeverGotDrained() throws {
+        let slot = VideoFrameCaptureSlot()
+        _ = slot.store(try makeNV12PixelBuffer(width: 320, height: 240), generation: 1)
+        XCTAssertTrue(slot.hasPendingFrame)
+
+        slot.clear()
+
+        XCTAssertFalse(
+            slot.hasPendingFrame,
+            "Teardown must not leave an IOSurface retained for a connection that ended"
+        )
+        XCTAssertNil(slot.take())
+    }
+
+    @MainActor
+    func testEndRenderingReleasesAPendingOCRCapture() throws {
+        let control = VideoRenderControl()
+        control.setGeneration(21)
+        control.setFrameCaptureEnabled(true)
+        let view = VideoRenderView(control: control, sink: nil)
+        let frame = RTCVideoFrame(buffer: try makeFrameBuffer(), rotation: ._0, timeStampNs: 0)
+
+        view.beginRendering(generation: 21)
+        view.renderFrame(frame)
+        view.endRendering()
+
+        XCTAssertFalse(
+            view.hasPendingCapturedFrameForTesting,
+            "Teardown clears the capture slot instead of holding the last frame forever"
+        )
+    }
+
+    // MARK: - View wiring
+
+    @MainActor
+    func testViewIsBackedByASampleBufferDisplayLayerThatFitsTheVideo() {
+        let view = VideoRenderView(control: VideoRenderControl(), sink: nil)
+        view.frame = CGRect(x: 0, y: 0, width: 800, height: 600)
+
+        let layer = view.layer as? AVSampleBufferDisplayLayer
+        XCTAssertNotNil(layer, "The backing layer is the display layer, not a Metal view")
+        XCTAssertEqual(layer?.videoGravity, .resizeAspect)
+        XCTAssertTrue(view.wantsLayer)
+        XCTAssertTrue(view.isOpaque)
+    }
+
+    @MainActor
+    func testRenderFrameDropsFramesUntilTheViewIsArmedForAGeneration() throws {
+        let control = VideoRenderControl()
+        control.setGeneration(11)
+        let view = VideoRenderView(control: control, sink: nil)
+        let frame = RTCVideoFrame(buffer: try makeFrameBuffer(), rotation: ._0, timeStampNs: 0)
+
+        // Not attached to a track yet: nothing is admitted, so the health clock stays empty.
+        view.renderFrame(frame)
+        XCTAssertNil(control.lastFrameTime)
+
+        view.beginRendering(generation: 11)
+        view.renderFrame(frame)
+        XCTAssertNotNil(control.lastFrameTime, "An armed view admits and stamps the frame")
+
+        // Teardown is symmetric: a late frame from the finished connection is ignored.
+        control.setLastFrameTime(nil)
+        view.endRendering()
+        view.renderFrame(frame)
+        XCTAssertNil(control.lastFrameTime)
+    }
+
+    /// The closest thing to proving video actually renders without a live stream: put the view in
+    /// a window, push decoded frames through `renderFrame` exactly as WebRTC's decode thread
+    /// would, and ask the renderer for the image it is currently displaying.
+    ///
+    /// This is what pins down the sample-buffer contract — invalid timing plus
+    /// `DisplayImmediately`, with no timebase or render synchronizer — as one that really
+    /// presents frames rather than silently queueing them forever.
+    @MainActor
+    func testDecodedFramesReachTheDisplayedImage() throws {
+        try XCTSkipUnless(
+            ProcessInfo.processInfo.environment["OVERLOOK_SKIP_WINDOW_TESTS"] == nil,
+            "Window-backed rendering test disabled by OVERLOOK_SKIP_WINDOW_TESTS"
+        )
+        guard #available(macOS 14.4, *) else {
+            throw XCTSkip("displayedPixelBuffer() needs macOS 14.4")
+        }
+
+        _ = NSApplication.shared
+        let control = VideoRenderControl()
+        control.setGeneration(1)
+        let view = VideoRenderView(control: control, sink: nil)
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 240)
+
+        let window = NSWindow(
+            contentRect: view.frame,
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        window.contentView = view
+        window.orderFront(nil)
+        defer { window.orderOut(nil) }
+
+        view.beginRendering(generation: 1)
+
+        let pixelBuffer = try makeMidGrayNV12PixelBuffer(width: 320, height: 240)
+        let frame = RTCVideoFrame(
+            buffer: RTCCVPixelBuffer(pixelBuffer: pixelBuffer),
+            rotation: ._0,
+            timeStampNs: 0
+        )
+
+        let renderer = try XCTUnwrap(view.layer as? AVSampleBufferDisplayLayer).sampleBufferRenderer
+        var displayed: CVPixelBuffer?
+        let deadline = Date().addingTimeInterval(5.0)
+        while displayed == nil, Date() < deadline {
+            view.renderFrame(frame)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+            displayed = renderer.displayedPixelBuffer()
+        }
+
+        XCTAssertNotEqual(renderer.status, .failed, "\(String(describing: renderer.error))")
+        let displayedBuffer = try XCTUnwrap(
+            displayed,
+            "The display layer never presented an enqueued frame"
+        )
+        XCTAssertEqual(CVPixelBufferGetWidth(displayedBuffer), 320)
+        XCTAssertEqual(CVPixelBufferGetHeight(displayedBuffer), 240)
+    }
+
+    private func makeMidGrayNV12PixelBuffer(width: Int, height: Int) throws -> CVPixelBuffer {
+        let pixelBuffer = try makeNV12PixelBuffer(width: width, height: height)
+        XCTAssertEqual(CVPixelBufferLockBaseAddress(pixelBuffer, []), kCVReturnSuccess)
+        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, []) }
+
+        for plane in 0..<CVPixelBufferGetPlaneCount(pixelBuffer) {
+            guard let base = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, plane) else { continue }
+            let bytes = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, plane)
+                * CVPixelBufferGetHeightOfPlane(pixelBuffer, plane)
+            memset(base, 128, bytes)
+        }
+        return pixelBuffer
+    }
+}
+
+// MARK: - Display engine
+
+/// Coverage for what the enqueue queue itself decides: which epoch a frame belongs to, whether the
+/// display layer can take another frame, how a failed renderer is retried, and the sample buffer
+/// handed over.
+final class VideoDisplayEngineTests: XCTestCase {
+    /// A stand-in for `AVSampleBufferVideoRenderer`, so backpressure and failure recovery can be
+    /// tested without a window, a display server or a live stream.
+    ///
+    /// Every member is touched on the engine's serial enqueue queue; tests read them only after
+    /// `waitForPendingWork()`, which is what orders those accesses.
+    private final class FakeSampleBufferRenderer: VideoSampleBufferRendering, @unchecked Sendable {
+        var isReadyForMoreMediaData = true
+        var requiresFlushToResumeDecoding = false
+        var status: AVQueuedSampleBufferRenderingStatus = .rendering
+        var error: Error?
+
+        var enqueuedBuffers: [CMSampleBuffer] = []
+        var flushCount = 0
+        /// When true, every enqueue drops the renderer into `.failed`, like one whose decoder
+        /// resources were revoked.
+        var failsOnEnqueue = false
+
+        func enqueue(_ sampleBuffer: CMSampleBuffer) {
+            enqueuedBuffers.append(sampleBuffer)
+            if failsOnEnqueue {
+                status = .failed
+            }
+        }
+
+        func flush() {
+            flushCount += 1
+            // A flush is what clears a failed renderer, on the real one too.
+            if status == .failed {
+                status = .rendering
+            }
+            error = nil
+        }
+    }
+
+    private let firstToken = VideoDisplayEngine.RenderToken(rawValue: 1)
+    private let secondToken = VideoDisplayEngine.RenderToken(rawValue: 2)
+
+    // MARK: - Render tokens
+
+    func testFramesCarryingASupersededTokenAreDroppedInsteadOfEnqueued() throws {
+        let renderer = FakeSampleBufferRenderer()
+        let engine = VideoDisplayEngine(videoRenderer: renderer)
+        engine.begin(token: firstToken)
+
+        // The teardown race: the decode thread read the token, was admitted, and only *then*
+        // handed the frame over — after `end()` had already flushed.
+        engine.end()
+        engine.display(try makeFrameBuffer(), token: firstToken)
+        engine.waitForPendingWork()
+
+        XCTAssertTrue(
+            renderer.enqueuedBuffers.isEmpty,
+            "A frame admitted before teardown must not reach the layer after the flush"
+        )
+        XCTAssertEqual(engine.currentStats.droppedStaleToken, 1)
+        XCTAssertEqual(engine.currentStats.enqueued, 0)
+    }
+
+    func testFramesFromThePreviousEpochAreDroppedAfterAFlushAdvancesTheToken() throws {
+        let renderer = FakeSampleBufferRenderer()
+        let engine = VideoDisplayEngine(videoRenderer: renderer)
+        engine.begin(token: firstToken)
+
+        engine.flush(token: secondToken)
+        engine.display(try makeFrameBuffer(), token: firstToken)
+        engine.display(try makeFrameBuffer(), token: secondToken)
+        engine.waitForPendingWork()
+
+        XCTAssertEqual(engine.currentStats.droppedStaleToken, 1, "The abandoned stream's frame")
+        XCTAssertEqual(engine.currentStats.enqueued, 1, "The new epoch's frame still displays")
+        XCTAssertEqual(renderer.enqueuedBuffers.count, 1)
+    }
+
+    func testNoFrameIsEnqueuedBeforeRenderingBegins() throws {
+        let renderer = FakeSampleBufferRenderer()
+        let engine = VideoDisplayEngine(videoRenderer: renderer)
+
+        engine.display(try makeFrameBuffer(), token: firstToken)
+        engine.waitForPendingWork()
+
+        XCTAssertTrue(renderer.enqueuedBuffers.isEmpty)
+        XCTAssertEqual(engine.currentStats.droppedStaleToken, 1)
+    }
+
+    func testBeginAdoptsTheNewEpochAndEnqueuesItsFrames() throws {
+        let renderer = FakeSampleBufferRenderer()
+        let engine = VideoDisplayEngine(videoRenderer: renderer)
+
+        engine.begin(token: firstToken)
+        engine.display(try makeFrameBuffer(), token: firstToken)
+        engine.waitForPendingWork()
+
+        XCTAssertEqual(renderer.enqueuedBuffers.count, 1)
+        XCTAssertEqual(engine.currentStats.enqueued, 1)
+        XCTAssertEqual(engine.currentStats.droppedStaleToken, 0)
+    }
+
+    // MARK: - Layer backpressure
+
+    func testFramesAreDroppedWhileTheLayerIsNotReadyForMoreMediaData() throws {
+        let renderer = FakeSampleBufferRenderer()
+        let engine = VideoDisplayEngine(videoRenderer: renderer)
+        engine.begin(token: firstToken)
+
+        // An occluded or minimised window: the layer stops consuming, and every sample buffer it
+        // retains pins an IOSurface out of the decoder pool.
+        renderer.isReadyForMoreMediaData = false
+        for _ in 0..<3 {
+            engine.display(try makeFrameBuffer(), token: firstToken)
+            engine.waitForPendingWork()
+        }
+
+        XCTAssertTrue(renderer.enqueuedBuffers.isEmpty, "Live video drops rather than queues")
+        XCTAssertEqual(engine.currentStats.droppedNotReady, 3)
+
+        // ...and it recovers on its own as soon as the layer consumes again.
+        renderer.isReadyForMoreMediaData = true
+        engine.display(try makeFrameBuffer(), token: firstToken)
+        engine.waitForPendingWork()
+
+        XCTAssertEqual(renderer.enqueuedBuffers.count, 1)
+        XCTAssertEqual(engine.currentStats.enqueued, 1)
+    }
+
+    // MARK: - Failure backoff
+
+    func testAPersistentlyFailingRendererIsRetriedOnABackoffRatherThanEveryFrame() throws {
+        let renderer = FakeSampleBufferRenderer()
+        renderer.failsOnEnqueue = true
+        let engine = VideoDisplayEngine(videoRenderer: renderer)
+        engine.begin(token: firstToken)
+
+        // 30 frames ≈ half a second of 60 fps video arriving faster than the first backoff window.
+        for _ in 0..<30 {
+            engine.display(try makeFrameBuffer(), token: firstToken)
+            engine.waitForPendingWork()
+        }
+
+        XCTAssertEqual(
+            renderer.enqueuedBuffers.count,
+            1,
+            "One recovery attempt, not one per frame: the rest wait out the backoff"
+        )
+        XCTAssertEqual(engine.currentStats.enqueued, 0)
+        XCTAssertEqual(engine.currentStats.droppedFailureBackoff, 29)
+    }
+
+    func testFailureBackoffEscalatesAndClearsOnSuccess() {
+        var backoff = VideoDisplayEngine.FailureBackoff()
+
+        XCTAssertTrue(backoff.shouldAttemptEnqueue(at: 100.0), "Nothing has failed yet")
+
+        backoff.recordFailure(at: 100.0)
+        XCTAssertFalse(backoff.shouldAttemptEnqueue(at: 100.05))
+        XCTAssertTrue(backoff.shouldAttemptEnqueue(at: 100.1), "First delay is 0.1 s")
+
+        backoff.recordFailure(at: 100.1)
+        XCTAssertFalse(backoff.shouldAttemptEnqueue(at: 100.3), "Second delay is longer")
+        XCTAssertTrue(backoff.shouldAttemptEnqueue(at: 100.35))
+
+        backoff.recordSuccess()
+        XCTAssertEqual(backoff.consecutiveFailures, 0)
+        XCTAssertNil(backoff.retryAfter)
+        XCTAssertTrue(backoff.shouldAttemptEnqueue(at: 100.36))
+    }
+
+    func testFailureBackoffCapsAtItsLongestDelay() throws {
+        var backoff = VideoDisplayEngine.FailureBackoff()
+        var now: CFTimeInterval = 0
+
+        for _ in 0..<10 {
+            _ = backoff.shouldAttemptEnqueue(at: now)
+            backoff.recordFailure(at: now)
+            now = try XCTUnwrap(backoff.retryAfter)
+        }
+
+        let longest = try XCTUnwrap(VideoDisplayEngine.FailureBackoff.delays.last)
+        backoff.recordFailure(at: 500)
+        XCTAssertEqual(backoff.retryAfter, 500 + longest)
+    }
+
+    func testAFailedRendererIsFlushedBeforeTheNextEnqueueAttempt() throws {
+        let renderer = FakeSampleBufferRenderer()
+        let engine = VideoDisplayEngine(videoRenderer: renderer)
+        engine.begin(token: firstToken)
+        let flushesFromBegin = { () -> Int in
+            engine.waitForPendingWork()
+            return renderer.flushCount
+        }()
+
+        renderer.requiresFlushToResumeDecoding = true
+        engine.display(try makeFrameBuffer(), token: firstToken)
+        engine.waitForPendingWork()
+
+        XCTAssertGreaterThan(
+            renderer.flushCount,
+            flushesFromBegin,
+            "A renderer that needs a flush to resume decoding gets one instead of freezing"
+        )
+        XCTAssertEqual(renderer.enqueuedBuffers.count, 1)
+    }
+
     // MARK: - Format description cache
 
     func testFormatDescriptionIsCreatedOnceForAnUnchangingFormat() throws {
@@ -270,6 +653,42 @@ final class VideoRenderViewTests: XCTestCase {
         XCTAssertEqual(displayImmediately, true)
     }
 
+    func testDecoderOutputReachesTheLayerUncopied() throws {
+        let renderer = FakeSampleBufferRenderer()
+        let engine = VideoDisplayEngine(videoRenderer: renderer)
+        engine.begin(token: firstToken)
+
+        let frameBuffer = try makeFrameBuffer()
+        engine.display(frameBuffer, token: firstToken)
+        engine.waitForPendingWork()
+
+        let enqueued = try XCTUnwrap(renderer.enqueuedBuffers.first)
+        XCTAssertTrue(
+            CMSampleBufferGetImageBuffer(enqueued) === frameBuffer.pixelBuffer,
+            "The zero-copy path: the decoder's IOSurface goes straight to the layer"
+        )
+    }
+
+    @MainActor
+    func testDisplayEngineEnqueuesDecodedFramesWithoutFailingOnARealRenderer() throws {
+        let layer = AVSampleBufferDisplayLayer()
+        let engine = VideoDisplayEngine(videoRenderer: layer.sampleBufferRenderer)
+        engine.begin(token: firstToken)
+
+        for size in [(width: 320, height: 240), (width: 640, height: 480)] {
+            let buffer = try makeFrameBuffer(width: size.width, height: size.height)
+            engine.display(buffer, token: firstToken)
+        }
+        engine.waitForPendingWork()
+
+        let renderer = layer.sampleBufferRenderer
+        XCTAssertNotEqual(
+            renderer.status,
+            .failed,
+            "Enqueueing decoder output must not fail the renderer: \(String(describing: renderer.error))"
+        )
+    }
+
     // MARK: - I420 fallback
 
     func testI420FallbackProducesAFullRangeNV12BufferWithInterleavedChroma() throws {
@@ -323,145 +742,6 @@ final class VideoRenderViewTests: XCTestCase {
         XCTAssertEqual(chroma[2], 10)
         XCTAssertEqual(chroma[3], 200)
     }
-
-    // MARK: - Display engine / view wiring
-
-    @MainActor
-    func testViewIsBackedByASampleBufferDisplayLayerThatFitsTheVideo() {
-        let view = VideoRenderView(control: VideoRenderControl(), sink: nil)
-        view.frame = CGRect(x: 0, y: 0, width: 800, height: 600)
-
-        let layer = view.layer as? AVSampleBufferDisplayLayer
-        XCTAssertNotNil(layer, "The backing layer is the display layer, not a Metal view")
-        XCTAssertEqual(layer?.videoGravity, .resizeAspect)
-        XCTAssertTrue(view.wantsLayer)
-        XCTAssertTrue(view.isOpaque)
-    }
-
-    @MainActor
-    func testRenderFrameDropsFramesUntilTheViewIsArmedForAGeneration() throws {
-        let control = VideoRenderControl()
-        control.setGeneration(11)
-        let view = VideoRenderView(control: control, sink: nil)
-        let pixelBuffer = try makeNV12PixelBuffer(width: 320, height: 240)
-        let frame = RTCVideoFrame(
-            buffer: RTCCVPixelBuffer(pixelBuffer: pixelBuffer),
-            rotation: ._0,
-            timeStampNs: 0
-        )
-
-        // Not attached to a track yet: nothing is admitted, so the health clock stays empty.
-        view.renderFrame(frame)
-        XCTAssertNil(control.lastFrameTime)
-
-        view.beginRendering(generation: 11)
-        view.renderFrame(frame)
-        XCTAssertNotNil(control.lastFrameTime, "An armed view admits and stamps the frame")
-
-        // Teardown is symmetric: a late frame from the finished connection is ignored.
-        control.setLastFrameTime(nil)
-        view.endRendering()
-        view.renderFrame(frame)
-        XCTAssertNil(control.lastFrameTime)
-    }
-
-    @MainActor
-    func testDisplayEngineEnqueuesDecodedFramesWithoutFailing() throws {
-        let layer = AVSampleBufferDisplayLayer()
-        let engine = VideoDisplayEngine(videoRenderer: layer.sampleBufferRenderer)
-
-        for size in [(width: 320, height: 240), (width: 640, height: 480)] {
-            let pixelBuffer = try makeNV12PixelBuffer(width: size.width, height: size.height)
-            engine.display(RTCCVPixelBuffer(pixelBuffer: pixelBuffer))
-        }
-
-        // The engine is asynchronous by design; drain its serial queue before asserting.
-        let drained = expectation(description: "enqueue queue drained")
-        engine.flush()
-        DispatchQueue.global().asyncAfter(deadline: .now() + 0.3) { drained.fulfill() }
-        wait(for: [drained], timeout: 2.0)
-
-        let renderer = layer.sampleBufferRenderer
-        XCTAssertNotEqual(
-            renderer.status,
-            .failed,
-            "Enqueueing decoder output must not fail the renderer: \(String(describing: renderer.error))"
-        )
-    }
-
-    /// The closest thing to proving video actually renders without a live stream: put the view in
-    /// a window, push decoded frames through `renderFrame` exactly as WebRTC's decode thread
-    /// would, and ask the renderer for the image it is currently displaying.
-    ///
-    /// This is what pins down the sample-buffer contract — invalid timing plus
-    /// `DisplayImmediately`, with no timebase or render synchronizer — as one that really
-    /// presents frames rather than silently queueing them forever.
-    @MainActor
-    func testDecodedFramesReachTheDisplayedImage() throws {
-        try XCTSkipUnless(
-            ProcessInfo.processInfo.environment["OVERLOOK_SKIP_WINDOW_TESTS"] == nil,
-            "Window-backed rendering test disabled by OVERLOOK_SKIP_WINDOW_TESTS"
-        )
-        guard #available(macOS 14.4, *) else {
-            throw XCTSkip("displayedPixelBuffer() needs macOS 14.4")
-        }
-
-        _ = NSApplication.shared
-        let control = VideoRenderControl()
-        control.setGeneration(1)
-        let view = VideoRenderView(control: control, sink: nil)
-        view.frame = CGRect(x: 0, y: 0, width: 320, height: 240)
-
-        let window = NSWindow(
-            contentRect: view.frame,
-            styleMask: [.borderless],
-            backing: .buffered,
-            defer: false
-        )
-        window.contentView = view
-        window.orderFront(nil)
-        defer { window.orderOut(nil) }
-
-        view.beginRendering(generation: 1)
-
-        let pixelBuffer = try makeMidGrayNV12PixelBuffer(width: 320, height: 240)
-        let frame = RTCVideoFrame(
-            buffer: RTCCVPixelBuffer(pixelBuffer: pixelBuffer),
-            rotation: ._0,
-            timeStampNs: 0
-        )
-
-        let renderer = try XCTUnwrap(view.layer as? AVSampleBufferDisplayLayer).sampleBufferRenderer
-        var displayed: CVPixelBuffer?
-        let deadline = Date().addingTimeInterval(5.0)
-        while displayed == nil, Date() < deadline {
-            view.renderFrame(frame)
-            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
-            displayed = renderer.displayedPixelBuffer()
-        }
-
-        XCTAssertNotEqual(renderer.status, .failed, "\(String(describing: renderer.error))")
-        let displayedBuffer = try XCTUnwrap(
-            displayed,
-            "The display layer never presented an enqueued frame"
-        )
-        XCTAssertEqual(CVPixelBufferGetWidth(displayedBuffer), 320)
-        XCTAssertEqual(CVPixelBufferGetHeight(displayedBuffer), 240)
-    }
-    private func makeMidGrayNV12PixelBuffer(width: Int, height: Int) throws -> CVPixelBuffer {
-        let pixelBuffer = try makeNV12PixelBuffer(width: width, height: height)
-        XCTAssertEqual(CVPixelBufferLockBaseAddress(pixelBuffer, []), kCVReturnSuccess)
-        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, []) }
-
-        for plane in 0..<CVPixelBufferGetPlaneCount(pixelBuffer) {
-            guard let base = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, plane) else { continue }
-            let bytes = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, plane)
-                * CVPixelBufferGetHeightOfPlane(pixelBuffer, plane)
-            memset(base, 128, bytes)
-        }
-        return pixelBuffer
-    }
-
 }
 
 #endif

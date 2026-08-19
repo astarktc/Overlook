@@ -174,7 +174,13 @@ class WebRTCManager: NSObject, ObservableObject {
     private var janusKeepAliveTimer: Timer?
     private var janusWaiters: [String: CheckedContinuation<[String: Any], Error>] = [:]
 
+    /// What the UI asked for (OCR mode on/off). Survives teardown, so an automatic reconnect
+    /// restores capture without needing SwiftUI to re-fire an `onChange`.
+    private var isOCRCaptureDesired: Bool = false
+    /// What the render path is currently allowed to do: the desire *and* a live rendering track.
     private var isFrameCaptureEnabled: Bool = false
+    /// True between `startRenderingVideo` and `stopRenderingVideo`.
+    private var isRenderingVideo: Bool = false
     
     override init() {
         super.init()
@@ -617,12 +623,58 @@ class WebRTCManager: NSObject, ObservableObject {
     }
 
     func setFrameCaptureEnabled(_ enabled: Bool) {
-        isFrameCaptureEnabled = enabled
-        renderControl.setFrameCaptureEnabled(enabled)
+        isOCRCaptureDesired = enabled
+        applyFrameCaptureState()
+    }
 
-        if enabled == false {
+    /// The single place the capture gate is written: capture runs only while the UI wants it *and*
+    /// a track is rendering, and turning it off always releases the retained frame.
+    private func applyFrameCaptureState() {
+        let enabled = isOCRCaptureDesired && isRenderingVideo
+        if isFrameCaptureEnabled != enabled {
+            isFrameCaptureEnabled = enabled
+            renderControl.setFrameCaptureEnabled(enabled)
+        }
+        if enabled == false, currentFrame != nil {
             currentFrame = nil
         }
+    }
+
+    /// Attaches the render view to `track` and arms it for the current generation.
+    ///
+    /// Attach/detach is symmetric with `stopRenderingVideo`: a repeated `didAdd` for the same
+    /// track is a no-op, and a *replacement* track detaches the previous one first — otherwise the
+    /// view ends up added to two tracks at once, mixing frames and keeping the old track alive.
+    private func startRenderingVideo(track: RTCVideoTrack) {
+        makeVideoRenderViewIfNeeded()
+        guard let videoView else { return }
+        guard videoTrack !== track else { return }
+
+        if let previousTrack = videoTrack {
+            previousTrack.remove(videoView)
+            videoView.endRendering()
+        }
+
+        videoTrack = track
+        // The generation the view will accept frames for is armed before the track can deliver
+        // anything.
+        videoView.beginRendering(generation: connectionGeneration)
+        track.add(videoView)
+        isRenderingVideo = true
+        // OCR mode may have been on since before this (re)connection.
+        applyFrameCaptureState()
+    }
+
+    /// The single teardown path for the render side: detach from the track, stop the render path,
+    /// and drop the capture gate together with the frame it retained.
+    private func stopRenderingVideo() {
+        if let videoTrack, let videoView {
+            videoTrack.remove(videoView)
+        }
+        videoView?.endRendering()
+        videoTrack = nil
+        isRenderingVideo = false
+        applyFrameCaptureState()
     }
     
     private func applyCodecSelectionState(_ state: CodecSelectionState) {
@@ -1610,11 +1662,7 @@ class WebRTCManager: NSObject, ObservableObject {
         dataChannel?.close()
         dataChannel = nil
 
-        if let videoTrack, let videoView {
-            videoTrack.remove(videoView)
-        }
-        videoView?.endRendering()
-        videoTrack = nil
+        stopRenderingVideo()
         
         peerConnection?.close()
         peerConnection = nil
@@ -1639,8 +1687,6 @@ class WebRTCManager: NSObject, ObservableObject {
         codecSelectionState = nil
         suppressFrameArrivalSignalsForWatchdogTesting = false
         renderControl.setSuppressFrameArrivalSignals(false)
-        isFrameCaptureEnabled = false
-        renderControl.setFrameCaptureEnabled(false)
         telemetry.reset()
         lastInboundVideoBytesReceived = nil
         lastInboundVideoBytesTimestamp = nil
@@ -1802,13 +1848,8 @@ extension WebRTCManager: @preconcurrency RTCPeerConnectionDelegate {
             applyPlayoutDelayHintIfPossible()
             guard let track = rtpReceiver.track as? RTCVideoTrack else { return }
 
-            videoTrack = track
-            makeVideoRenderViewIfNeeded()
-            guard let videoView else { return }
-            // The view *is* the renderer: one attach, and the generation it will accept frames
-            // for is armed before the track can deliver any.
-            videoView.beginRendering(generation: connectionGeneration)
-            track.add(videoView)
+            // The view *is* the renderer: attach exactly once per track, and never to two tracks.
+            startRenderingVideo(track: track)
         }
     }
 }

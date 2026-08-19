@@ -158,12 +158,17 @@ struct VideoSurfaceView: View {
         }
     }
 
+    /// The UI's *desire* for OCR mode. `WebRTCManager` owns whether capture is currently possible
+    /// (it needs a rendering track) and reapplies this desire whenever rendering begins, so OCR
+    /// keeps working across an automatic reconnect without SwiftUI having to re-fire `onChange`.
     private func setOCRMode(_ enabled: Bool) {
         webRTCManager.setFrameCaptureEnabled(enabled)
         if enabled {
             ocrRegionsTask?.cancel()
             ocrRegionsTask = Task { @MainActor in
                 while !Task.isCancelled && isOCRModeEnabled {
+                    // `currentFrame` is nil while disconnected or reconnecting; the loop keeps
+                    // polling so regions reappear on their own once frames resume.
                     _ = try? await ocrManager.detectTextRegions(in: webRTCManager.currentFrame)
                     try? await Task.sleep(nanoseconds: 650_000_000)
                 }

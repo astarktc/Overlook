@@ -183,6 +183,65 @@ struct VideoFrameSignalThrottles: Equatable {
     }
 }
 
+/// Coalescing hand-off for OCR frame capture: one latest-frame slot plus at most one scheduled
+/// main-actor drain.
+///
+/// The naive shape — one `Task { @MainActor }` per captured frame, each strongly retaining its
+/// pixel buffer — turns a stalled main thread into an unbounded pile of retained IOSurfaces and
+/// drains the decoder's buffer pool. OCR only ever wants the *newest* frame, so a new capture
+/// replaces the slot's contents instead of queueing behind it, and the drain that is already
+/// scheduled picks up whatever is there when the main actor gets a turn.
+final class VideoFrameCaptureSlot: @unchecked Sendable {
+    private struct Slot {
+        var pixelBuffer: CVPixelBuffer?
+        var generation: Int = .min
+        /// True while a main-actor drain is scheduled but has not run yet.
+        var isDrainScheduled = false
+    }
+
+    // `uncheckedState` because `CVPixelBuffer` is a CoreFoundation type and therefore not
+    // `Sendable`; the lock is what makes the hand-off safe.
+    private let slot = OSAllocatedUnfairLock(uncheckedState: Slot())
+
+    /// Stores the newest captured frame, dropping any frame that has not been drained yet.
+    /// Returns true exactly when the caller must schedule a drain, so at most one is in flight.
+    ///
+    /// `withLockUnchecked` throughout: `CVPixelBuffer` is a CoreFoundation type and so not
+    /// `Sendable`: the lock, plus the fact that ownership is *moved* (a stored buffer is only ever
+    /// read by the drain that clears the slot), is what makes the hand-off safe.
+    func store(_ pixelBuffer: CVPixelBuffer, generation: Int) -> Bool {
+        slot.withLockUnchecked { slot in
+            slot.pixelBuffer = pixelBuffer
+            slot.generation = generation
+            guard slot.isDrainScheduled == false else { return false }
+            slot.isDrainScheduled = true
+            return true
+        }
+    }
+
+    /// Takes the pending frame, if any, and clears the scheduled-drain flag so the next capture
+    /// schedules a fresh drain.
+    func take() -> (pixelBuffer: CVPixelBuffer, generation: Int)? {
+        slot.withLockUnchecked { slot in
+            slot.isDrainScheduled = false
+            guard let pixelBuffer = slot.pixelBuffer else { return nil }
+            slot.pixelBuffer = nil
+            return (pixelBuffer, slot.generation)
+        }
+    }
+
+    /// Releases a frame that is waiting for a drain — used by teardown, so a finished connection
+    /// never leaves an IOSurface retained here.
+    func clear() {
+        slot.withLockUnchecked { $0.pixelBuffer = nil }
+    }
+
+    /// True while a frame is waiting to be drained; a test seam, not part of the frame path.
+    var hasPendingFrame: Bool {
+        slot.withLockUnchecked { $0.pixelBuffer != nil }
+    }
+}
+
 /// Thread-safe holder for `VideoFrameSignalThrottles`: an unfair lock rather than a queue, because
 /// this runs on the decode thread for every frame.
 final class VideoFrameSignalGate: Sendable {
@@ -203,6 +262,22 @@ final class VideoFrameSignalGate: Sendable {
 
 // MARK: - Display engine
 
+/// The slice of `AVSampleBufferVideoRenderer` the display engine uses.
+///
+/// It exists so the backpressure and failure-recovery decisions — "is the layer still consuming?",
+/// "did the enqueue fail?" — are testable without a window, a display server or a live stream.
+/// `AVSampleBufferVideoRenderer` satisfies it as-is; nothing is wrapped or copied.
+protocol VideoSampleBufferRendering: AnyObject {
+    var isReadyForMoreMediaData: Bool { get }
+    var requiresFlushToResumeDecoding: Bool { get }
+    var status: AVQueuedSampleBufferRenderingStatus { get }
+    var error: Error? { get }
+    func enqueue(_ sampleBuffer: CMSampleBuffer)
+    func flush()
+}
+
+extension AVSampleBufferVideoRenderer: VideoSampleBufferRendering {}
+
 /// Turns decoded frames into `AVSampleBufferDisplayLayer` enqueues on a dedicated serial queue.
 ///
 /// Zero-copy is the whole point: a hardware-decoded frame arrives as an `RTCCVPixelBuffer`
@@ -211,6 +286,68 @@ final class VideoFrameSignalGate: Sendable {
 /// happens in the window server, off our main thread — so a stalled main thread cannot drop
 /// video frames.
 final class VideoDisplayEngine: @unchecked Sendable {
+    /// Identifies one rendering epoch — the unit the enqueue queue validates against.
+    ///
+    /// The generation guard alone cannot close the teardown race: the decode thread reads the
+    /// generation, is admitted, and only *then* hands the frame to the enqueue queue. If teardown
+    /// happens in between, the flush runs first and the already-admitted frame is enqueued after
+    /// it. A token travels with the frame and is validated *inside* the serialized enqueue
+    /// operation, so a frame from a superseded epoch is dropped rather than presented.
+    struct RenderToken: Hashable, Sendable {
+        let rawValue: UInt64
+
+        /// No frame can ever carry this: it is what the engine holds before `begin` and after
+        /// `end`.
+        static let invalid = RenderToken(rawValue: 0)
+    }
+
+    /// Why frames were dropped, for tests and diagnosis. Never used to make decisions.
+    struct Stats: Equatable, Sendable {
+        var enqueued = 0
+        /// Frames admitted in an epoch that ended before the enqueue block ran.
+        var droppedStaleToken = 0
+        /// Frames dropped because the display layer was not consuming (occluded window, stalled
+        /// renderer).
+        var droppedNotReady = 0
+        /// Frames dropped while a failed renderer is backing off.
+        var droppedFailureBackoff = 0
+        /// Frames dropped because our own dispatch backlog was full.
+        var droppedBacklog = 0
+    }
+
+    /// The retry schedule for a renderer that fails on enqueue, as pure value math.
+    ///
+    /// Without this, a permanently failed renderer is flushed and re-enqueued for *every* decoded
+    /// frame — 60 Hz of futile recovery work plus a 60 Hz log flood. Recovery is still attempted,
+    /// just at a rate that backs off as failures repeat.
+    struct FailureBackoff: Equatable {
+        static let delays: [CFTimeInterval] = [0.1, 0.25, 0.5, 1.0]
+
+        private(set) var consecutiveFailures = 0
+        private(set) var retryAfter: CFTimeInterval?
+
+        /// True when the renderer may be touched again. Clears the deadline once it passes, so
+        /// exactly one frame per backoff window gets a recovery attempt.
+        mutating func shouldAttemptEnqueue(at now: CFTimeInterval) -> Bool {
+            guard let retryAfter else { return true }
+            guard now >= retryAfter else { return false }
+            self.retryAfter = nil
+            return true
+        }
+
+        mutating func recordFailure(at now: CFTimeInterval) {
+            let index = min(consecutiveFailures, Self.delays.count - 1)
+            retryAfter = now + Self.delays[index]
+            consecutiveFailures += 1
+        }
+
+        mutating func recordSuccess() {
+            guard consecutiveFailures != 0 || retryAfter != nil else { return }
+            consecutiveFailures = 0
+            retryAfter = nil
+        }
+    }
+
     /// Caches the `CMVideoFormatDescription` describing the decoder's output.
     ///
     /// Creating one per frame is pure waste; `CMVideoFormatDescriptionMatchesImageBuffer` is the
@@ -259,51 +396,100 @@ final class VideoDisplayEngine: @unchecked Sendable {
     /// from pinning every IOSurface in the pool.
     private static let maxPendingEnqueues = 6
 
-    private let videoRenderer: AVSampleBufferVideoRenderer
+    private let videoRenderer: any VideoSampleBufferRendering
     private let enqueueQueue = DispatchQueue(
         label: "com.overlook.video-enqueue",
         qos: .userInteractive
     )
     private let pendingEnqueues = OSAllocatedUnfairLock(initialState: 0)
+    private let stats = OSAllocatedUnfairLock(initialState: Stats())
 
     /// Touched only on `enqueueQueue`.
     private var formatCache = FormatDescriptionCache()
+    /// Touched only on `enqueueQueue`: the epoch the engine currently accepts frames for.
+    private var activeToken: RenderToken = .invalid
+    /// Touched only on `enqueueQueue`.
+    private var failureBackoff = FailureBackoff()
 
-    init(videoRenderer: AVSampleBufferVideoRenderer) {
+    init(videoRenderer: any VideoSampleBufferRendering) {
         self.videoRenderer = videoRenderer
+    }
+
+    /// Frame accounting; a diagnostic/test seam, safe to read from any thread.
+    var currentStats: Stats {
+        stats.withLock { $0 }
     }
 
     /// Hands one decoded frame buffer to the display layer. Safe to call from any thread; the
     /// work itself is serialized on `enqueueQueue` and never touches the main thread.
-    func display(_ buffer: RTCVideoFrameBuffer) {
+    ///
+    /// `token` is the epoch the frame was admitted in. It is validated on the enqueue queue, not
+    /// here, because that is the only place ordering against `begin`/`end`/`flush` is guaranteed.
+    func display(_ buffer: RTCVideoFrameBuffer, token: RenderToken) {
         let admitted = pendingEnqueues.withLock { pending -> Bool in
             guard pending < Self.maxPendingEnqueues else { return false }
             pending += 1
             return true
         }
-        guard admitted else { return }
+        guard admitted else {
+            record { $0.droppedBacklog += 1 }
+            return
+        }
 
         enqueueQueue.async { [self] in
             defer { pendingEnqueues.withLock { $0 -= 1 } }
+            // The epoch check is part of the serialized enqueue operation: a frame admitted a
+            // moment before teardown lands here *after* the flush, and must be dropped instead of
+            // presenting a stale IOSurface from a connection that no longer exists.
+            guard token == activeToken else {
+                record { $0.droppedStaleToken += 1 }
+                return
+            }
             guard let pixelBuffer = Self.displayablePixelBuffer(for: buffer) else { return }
             enqueueOnQueue(pixelBuffer)
         }
     }
 
-    /// Drops everything queued for display, keeping the last displayed image.
-    func flush() {
+    /// Starts a new rendering epoch: only frames carrying `token` are enqueued from here on.
+    func begin(token: RenderToken) {
+        adopt(token, resetFormatCache: true)
+    }
+
+    /// Ends rendering: drops everything queued for display and refuses every frame until the next
+    /// `begin`, including frames already admitted by the decode thread.
+    func end() {
+        adopt(.invalid, resetFormatCache: true)
+    }
+
+    /// Drops everything queued for display and starts a new epoch, so frames already admitted for
+    /// the stream being abandoned cannot land after the flush.
+    func flush(token: RenderToken) {
+        adopt(token, resetFormatCache: false)
+    }
+
+    /// Every epoch transition happens on the enqueue queue, in order with the frames themselves —
+    /// that ordering is the whole mechanism.
+    private func adopt(_ token: RenderToken, resetFormatCache: Bool) {
         enqueueQueue.async { [self] in
+            activeToken = token
             videoRenderer.flush()
+            // A flush is exactly what clears a failed renderer, so the new epoch starts without
+            // inheriting the old one's backoff.
+            failureBackoff.recordSuccess()
+            if resetFormatCache {
+                formatCache.reset()
+            }
         }
     }
 
-    /// Flush plus a forget of the cached format description — used when a connection ends, so the
-    /// next stream never inherits this one's format state.
-    func reset() {
-        enqueueQueue.async { [self] in
-            videoRenderer.flush()
-            formatCache.reset()
-        }
+    /// Blocks until everything already submitted to the enqueue queue has run. A test seam: the
+    /// frame path never calls this.
+    func waitForPendingWork() {
+        enqueueQueue.sync {}
+    }
+
+    private func record(_ mutation: (inout Stats) -> Void) {
+        stats.withLock { mutation(&$0) }
     }
 
     // MARK: Sample buffer construction
@@ -436,6 +622,34 @@ final class VideoDisplayEngine: @unchecked Sendable {
     // MARK: Enqueue
 
     private func enqueueOnQueue(_ pixelBuffer: CVPixelBuffer) {
+        let now = CACurrentMediaTime()
+
+        // A renderer that keeps failing is retried on a backoff instead of being flushed and
+        // re-enqueued for every one of 60 frames a second.
+        guard failureBackoff.shouldAttemptEnqueue(at: now) else {
+            record { $0.droppedFailureBackoff += 1 }
+            return
+        }
+
+        // A failed renderer stays failed until flushed (and the same is true when the system
+        // revokes decoder resources), so recover before enqueueing rather than silently freezing.
+        if videoRenderer.status == .failed || videoRenderer.requiresFlushToResumeDecoding {
+            Self.logOnceEvery5Seconds(
+                "[Overlook] video renderer needs a flush (status=\(videoRenderer.status.rawValue)): flushing"
+            )
+            videoRenderer.flush()
+        }
+
+        // Backpressure from the layer, not just from our own dispatch backlog: when the window is
+        // occluded or minimised the renderer stops consuming, and every sample buffer it retains
+        // pins an IOSurface out of the decoder's pool. Our queue would stay empty while the
+        // layer's backlog grew without bound. This is a live KVM stream with no timeline, so the
+        // honest answer is to drop the frame — a newer one is 16 ms away.
+        guard videoRenderer.isReadyForMoreMediaData else {
+            record { $0.droppedNotReady += 1 }
+            return
+        }
+
         let (description, replacedPrevious) = formatCache.formatDescription(for: pixelBuffer)
         guard let description else {
             Self.logOnceEvery5Seconds("[Overlook] failed to create a video format description")
@@ -456,24 +670,22 @@ final class VideoDisplayEngine: @unchecked Sendable {
             return
         }
 
-        // A failed renderer stays failed until flushed (and the same is true when the system
-        // revokes decoder resources), so recover before enqueueing rather than silently freezing.
-        if videoRenderer.status == .failed || videoRenderer.requiresFlushToResumeDecoding {
-            Self.logOnceEvery5Seconds(
-                "[Overlook] video renderer needs a flush (status=\(videoRenderer.status.rawValue)): flushing"
-            )
-            videoRenderer.flush()
-        }
-
         videoRenderer.enqueue(sampleBuffer)
 
         if videoRenderer.status == .failed {
             Self.logOnceEvery5Seconds(
                 "[Overlook] video renderer failed on enqueue: \(String(describing: videoRenderer.error))"
             )
+            // Flush to clear the failure, then wait out the backoff rather than immediately
+            // re-enqueueing this frame: the next decoded frame is milliseconds away and is a
+            // better thing to show than a retry loop at frame rate.
             videoRenderer.flush()
-            videoRenderer.enqueue(sampleBuffer)
+            failureBackoff.recordFailure(at: now)
+            return
         }
+
+        failureBackoff.recordSuccess()
+        record { $0.enqueued += 1 }
     }
 
     // MARK: Logging
@@ -508,10 +720,19 @@ final class VideoRenderView: NSView, RTCVideoRenderer {
     private let engine: VideoDisplayEngine
     private let control: VideoRenderControl
     private let signalGate = VideoFrameSignalGate()
+    private let captureSlot = VideoFrameCaptureSlot()
 
-    /// The generation this view is currently rendering for; `Int.min` until it is attached to a
-    /// track, so nothing is displayed before or after a connection.
-    private let renderGeneration = OSAllocatedUnfairLock(initialState: Int.min)
+    /// What the decode thread needs to read atomically per frame: the generation this view is
+    /// rendering for (`Int.min` until it is attached to a track, so nothing is displayed before or
+    /// after a connection) and the render token that generation's frames travel with.
+    private struct RenderState {
+        var generation: Int = .min
+        var token: VideoDisplayEngine.RenderToken = .invalid
+        /// Monotonic; `RenderToken.invalid` is 0, so real tokens start at 1.
+        var nextTokenValue: UInt64 = 1
+    }
+
+    private let renderState = OSAllocatedUnfairLock(initialState: RenderState())
 
     /// Set once, on the main actor, immediately after init. Read from the decode thread only to
     /// hop to the main actor, which is why the unchecked opt-out is safe here.
@@ -554,21 +775,50 @@ final class VideoRenderView: NSView, RTCVideoRenderer {
     /// from a connection that has since been torn down — are dropped without being displayed,
     /// counted or allowed to stamp the stream-health clock.
     func beginRendering(generation: Int) {
-        renderGeneration.withLock { $0 = generation }
+        let token = advanceToken(generation: generation)
         signalGate.reset()
-        engine.reset()
+        captureSlot.clear()
+        engine.begin(token: token)
     }
 
-    /// Symmetric teardown: stop accepting frames and drop everything queued for display.
+    /// Symmetric teardown: stop accepting frames, drop everything queued for display, and release
+    /// any frame still waiting for an OCR drain.
+    ///
+    /// Advancing the token here is what closes the teardown race: a frame the decode thread
+    /// admitted a moment ago carries the old token, so the enqueue queue drops it after the flush
+    /// instead of presenting it.
     func endRendering() {
-        renderGeneration.withLock { $0 = .min }
+        _ = advanceToken(generation: .min)
         signalGate.reset()
-        engine.reset()
+        captureSlot.clear()
+        engine.end()
     }
 
-    /// Drops queued frames without changing the generation.
+    /// Drops queued frames without changing the generation. The token still advances, so frames
+    /// already admitted for the stream being abandoned cannot land after the flush.
     func flushDisplay() {
-        engine.flush()
+        let token = renderState.withLock { state -> VideoDisplayEngine.RenderToken in
+            Self.advanceToken(in: &state, generation: state.generation)
+        }
+        engine.flush(token: token)
+    }
+
+    /// Moves the view to a fresh epoch and returns its token. Callers are on the main actor; the
+    /// lock is what the decode thread reads against.
+    private func advanceToken(generation: Int) -> VideoDisplayEngine.RenderToken {
+        renderState.withLock { state in
+            Self.advanceToken(in: &state, generation: generation)
+        }
+    }
+
+    private static nonisolated func advanceToken(
+        in state: inout RenderState,
+        generation: Int
+    ) -> VideoDisplayEngine.RenderToken {
+        state.generation = generation
+        state.token = VideoDisplayEngine.RenderToken(rawValue: state.nextTokenValue)
+        state.nextTokenValue &+= 1
+        return state.token
     }
 
     // MARK: RTCVideoRenderer
@@ -580,7 +830,7 @@ final class VideoRenderView: NSView, RTCVideoRenderer {
     nonisolated func renderFrame(_ frame: RTCVideoFrame?) {
         guard let frame else { return }
 
-        let generation = renderGeneration.withLock { $0 }
+        let (generation, token) = renderState.withLock { ($0.generation, $0.token) }
         let now = CACurrentMediaTime()
         let admission = control.admitFrame(generation: generation, at: now)
         guard admission.isCurrentGeneration else { return }
@@ -589,7 +839,7 @@ final class VideoRenderView: NSView, RTCVideoRenderer {
             VideoRenderView.logRotationOnce(frame.rotation)
         }
 
-        engine.display(frame.buffer)
+        engine.display(frame.buffer, token: token)
 
         // Watchdog testing (OVERLOOK_FORCE_DECODE_STARVATION) withholds the signals only; the
         // frame above is still displayed, exactly as before.
@@ -616,17 +866,36 @@ final class VideoRenderView: NSView, RTCVideoRenderer {
         }
 
         if shouldCaptureFrame, let pixelBufferFrame = frame.buffer as? RTCCVPixelBuffer {
-            let pixelBuffer = pixelBufferFrame.pixelBuffer
-            Task { @MainActor [weak self] in
-                self?.sink?.videoRenderDidCaptureFrame(pixelBuffer, generation: generation)
-            }
+            captureFrame(pixelBufferFrame.pixelBuffer, generation: generation)
         }
+    }
+
+    /// Hands the newest frame to OCR without spawning a task per frame: the slot keeps only the
+    /// latest buffer and at most one main-actor drain is ever scheduled, so a stalled main thread
+    /// cannot accumulate retained IOSurfaces.
+    private nonisolated func captureFrame(_ pixelBuffer: CVPixelBuffer, generation: Int) {
+        guard captureSlot.store(pixelBuffer, generation: generation) else { return }
+        Task { @MainActor [weak self] in
+            self?.drainCapturedFrame()
+        }
+    }
+
+    @MainActor
+    private func drainCapturedFrame() {
+        guard let captured = captureSlot.take() else { return }
+        sink?.videoRenderDidCaptureFrame(captured.pixelBuffer, generation: captured.generation)
+    }
+
+    /// True while a captured frame is waiting for its main-actor drain. A test seam; the frame
+    /// path never reads it.
+    var hasPendingCapturedFrameForTesting: Bool {
+        captureSlot.hasPendingFrame
     }
 
     /// Called by WebRTC when the track's frame size changes. Rare, and the manager equality-gates
     /// the publish, so a plain hop is the right cost here.
     nonisolated func setSize(_ size: CGSize) {
-        let generation = renderGeneration.withLock { $0 }
+        let generation = renderState.withLock { $0.generation }
         guard control.isCurrentGeneration(generation) else { return }
 
         Task { @MainActor [weak self] in
