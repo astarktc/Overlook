@@ -62,11 +62,16 @@ struct ContentView: View {
         }
     }
 
-    // ticket 04 will drop the live stats from the title entirely; then this becomes the
-    // whole title and `WindowTitleTelemetryHost` can go away.
-    /// Everything in the window title that is *not* telemetry. The kbps/fps half is read
-    /// inside `WindowTitleTelemetryHost`, so a stats tick never invalidates this body.
-    private var windowTitlePrefix: String {
+    /// The window title: app name, device, connection state, guest resolution — and nothing
+    /// that ticks. Ticket 04 removed the live kbps/fps half (and with it the only telemetry
+    /// observer that fed window chrome), so the titlebar + unified toolbar no longer relayout
+    /// ~1–2×/s. Resolution stays because it changes at connection-level frequency only: it
+    /// arrives with the first frame and again on a guest mode change (`WebRTCManager` assigns
+    /// `videoSize` only when the size actually differs).
+    ///
+    /// This is a plain value; `applyWindowTitle(_:)` is the only thing that writes it to the
+    /// window (see `.onChange(of: windowTitle, initial: true)` below).
+    private var windowTitle: String {
         let device = kvmDeviceManager.connectedDevice
 
         let deviceLabel: String
@@ -95,6 +100,25 @@ struct ContentView: View {
         }
 
         return "Overlook - \(deviceLabel) / \(connectionState) / \(resolution)"
+    }
+
+    /// Ticket 04: the single owner of `window.title`.
+    ///
+    /// Called only from the two `onChange` hooks below (title value changed, or the window
+    /// reference arrived), never from an `NSViewRepresentable.updateNSView`, so a SwiftUI pass
+    /// cannot mutate window chrome as a side effect. Writes synchronously on the current
+    /// runloop turn — no `DispatchQueue.main.async` hop — and compares first, so a pass that
+    /// recomputes the same string touches AppKit not at all.
+    ///
+    /// `titleVisibility` / `toolbar.isVisible` are deliberately *not* touched here: their sole
+    /// owner is `WindowAspectRatioSetter.Coordinator`'s fullscreen chrome logic.
+    @MainActor
+    private func applyWindowTitle(_ title: String) {
+        // [DEBUG-swiftui-audit]
+        if DiagFlags.noWindowSetters { return }
+        guard let window = windowRef else { return }
+        guard window.title != title else { return }
+        window.title = title
     }
 
     private func applyAppAppearance() {
@@ -271,7 +295,6 @@ struct ContentView: View {
             )
         }
         .background(WindowAspectRatioSetter(videoSize: webRTCManager.videoSize))
-        .background(WindowTitleTelemetryHost(titlePrefix: windowTitlePrefix))
         .background(WindowReferenceSetter(window: $windowRef))
         .preferredColorScheme(preferredColorScheme)
         .onAppear {
@@ -311,6 +334,15 @@ struct ContentView: View {
         .onChange(of: windowRef) { _, newValue in
             isFullscreen = newValue?.styleMask.contains(.fullScreen) ?? false
             showFullscreenControls = false
+            // Ticket 04: the window arrives after the first body pass, so this is where the
+            // initial title lands.
+            applyWindowTitle(windowTitle)
+        }
+        // Ticket 04: the only trigger for a title write. `windowTitle` reads connection state,
+        // the connected device and `videoSize` — all of which change at connect/disconnect/mode
+        // frequency — so this fires a handful of times per session, not once per second.
+        .onChange(of: windowTitle, initial: true) { _, newValue in
+            applyWindowTitle(newValue)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { note in
             guard let window = note.object as? NSWindow else { return }
@@ -643,9 +675,13 @@ private struct WindowAspectRatioSetter: NSViewRepresentable {
         if context.coordinator.didConfigureWindow == false {
             context.coordinator.didConfigureWindow = true
             let coordinator = context.coordinator
+            // One-time window configuration. The async hop is genuinely needed: this runs inside
+            // a SwiftUI update pass, and mutating `styleMask` (a geometry-affecting change)
+            // synchronously from there re-enters layout. It happens once per window, not per
+            // pass, so it is not a churn source. Compare-before-write anyway.
             DispatchQueue.main.async {
-                window.titlebarAppearsTransparent = false
-                window.styleMask.remove(.fullSizeContentView)
+                Coordinator.setTitlebarAppearsTransparent(false, on: window)
+                Coordinator.setFullSizeContentView(false, on: window)
                 coordinator.attach(to: window)
             }
         }
@@ -722,36 +758,74 @@ private struct WindowAspectRatioSetter: NSViewRepresentable {
             }
         }
 
+        /// Ticket 04: this coordinator is the *only* owner of `titleVisibility`,
+        /// `toolbar.isVisible`, `titlebarAppearsTransparent`, `.fullSizeContentView` and
+        /// `titlebarSeparatorStyle`. `WindowTitleSetter` used to also write `titleVisibility`
+        /// unconditionally from every SwiftUI pass; it is gone.
         private func applyFullscreenChrome(window: NSWindow) {
-            window.titlebarAppearsTransparent = true
-            window.titleVisibility = .hidden
-            window.styleMask.insert(.fullSizeContentView)
-            window.toolbar?.isVisible = false
+            Coordinator.setTitlebarAppearsTransparent(true, on: window)
+            Coordinator.setTitleVisibility(.hidden, on: window)
+            Coordinator.setFullSizeContentView(true, on: window)
+            Coordinator.setToolbarVisible(false, on: window)
             if #available(macOS 11.0, *) {
-                window.titlebarSeparatorStyle = .none
+                Coordinator.setTitlebarSeparatorStyle(.none, on: window)
             }
         }
 
         private func restoreWindowedChrome(window: NSWindow) {
             if let stored = storedWindowedTitlebarAppearsTransparent {
-                window.titlebarAppearsTransparent = stored
+                Coordinator.setTitlebarAppearsTransparent(stored, on: window)
             }
             if let hadFullSize = storedWindowedStyleMaskHadFullSizeContentView {
-                if hadFullSize {
-                    window.styleMask.insert(.fullSizeContentView)
-                } else {
-                    window.styleMask.remove(.fullSizeContentView)
-                }
+                Coordinator.setFullSizeContentView(hadFullSize, on: window)
             }
             if let stored = storedWindowedTitleVisibility {
-                window.titleVisibility = stored
+                Coordinator.setTitleVisibility(stored, on: window)
             }
             if let stored = storedWindowedToolbarIsVisible {
-                window.toolbar?.isVisible = stored
+                Coordinator.setToolbarVisible(stored, on: window)
             }
             if #available(macOS 11.0, *) {
-                window.titlebarSeparatorStyle = .automatic
+                Coordinator.setTitlebarSeparatorStyle(.automatic, on: window)
             }
+        }
+
+        // MARK: - Compare-before-write chrome primitives
+        //
+        // Every chrome write in this file goes through one of these, so a no-op apply/restore
+        // (or a re-entered configure) touches AppKit not at all and cannot invalidate geometry.
+
+        static func setTitlebarAppearsTransparent(_ value: Bool, on window: NSWindow) {
+            guard window.titlebarAppearsTransparent != value else { return }
+            window.titlebarAppearsTransparent = value
+        }
+
+        static func setTitleVisibility(_ value: NSWindow.TitleVisibility, on window: NSWindow) {
+            guard window.titleVisibility != value else { return }
+            window.titleVisibility = value
+        }
+
+        static func setFullSizeContentView(_ present: Bool, on window: NSWindow) {
+            guard window.styleMask.contains(.fullSizeContentView) != present else { return }
+            if present {
+                window.styleMask.insert(.fullSizeContentView)
+            } else {
+                window.styleMask.remove(.fullSizeContentView)
+            }
+        }
+
+        static func setToolbarVisible(_ value: Bool, on window: NSWindow) {
+            guard let toolbar = window.toolbar, toolbar.isVisible != value else { return }
+            toolbar.isVisible = value
+        }
+
+        @available(macOS 11.0, *)
+        static func setTitlebarSeparatorStyle(
+            _ value: NSTitlebarSeparatorStyle,
+            on window: NSWindow
+        ) {
+            guard window.titlebarSeparatorStyle != value else { return }
+            window.titlebarSeparatorStyle = value
         }
 
         private func adjustFrameToVideoAspect(window: NSWindow) {
@@ -846,45 +920,9 @@ extension WindowAspectRatioSetter.Coordinator: NSWindowDelegate {
     }
 }
 
-// ticket 04: the window title is scheduled to stop carrying live stats. Until then this tiny
-// leaf is the only telemetry observer in ContentView's subtree, so a kbps/fps tick invalidates
-// it alone instead of the whole window body.
-private struct WindowTitleTelemetryHost: View {
-    @EnvironmentObject private var telemetryModel: StreamTelemetryModel
-
-    let titlePrefix: String
-
-    var body: some View {
-        // [DEBUG-swiftui-audit]
-        let _ = DiagFlags.printChanges ? Self._printChanges() : ()
-        let telemetry = telemetryModel.snapshot
-        let kbps = telemetry.videoKbps.map { "\($0) kbps" } ?? "— kbps"
-        let fps = telemetry.videoFps.map { "\($0) fps dynamic" } ?? "— fps dynamic"
-        WindowTitleSetter(title: "\(titlePrefix) / \(kbps) / \(fps)")
-    }
-}
-
-private struct WindowTitleSetter: NSViewRepresentable {
-    let title: String
-
-    func makeNSView(context: Context) -> NSView {
-        NSView(frame: .zero)
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        // [DEBUG-swiftui-audit]
-        if DiagFlags.noWindowSetters { return }
-        guard let window = nsView.window else { return }
-        DispatchQueue.main.async {
-            if window.title != title {
-                window.title = title
-            }
-            if window.styleMask.contains(.fullScreen) == false {
-                window.titleVisibility = .visible
-            }
-        }
-    }
-}
+// Ticket 04: `WindowTitleTelemetryHost` and `WindowTitleSetter` were deleted here. The title no
+// longer carries telemetry (so no window-chrome view observes `StreamTelemetryModel` at all), and
+// it is applied by `ContentView.applyWindowTitle(_:)` instead of by a per-pass `updateNSView`.
 
 struct ConnectionsPopoverView: View {
     @Binding var selectedDevice: KVMDevice?
