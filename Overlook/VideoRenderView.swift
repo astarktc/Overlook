@@ -38,12 +38,16 @@ final class VideoRenderControl: Sendable {
         /// True for the first decoded frame of the current *stream*: the first frame admitted
         /// in the current stream epoch while the stream-health clock is nil.
         ///
-        /// "First frame of the replacement stream" after a codec fallback means exactly this:
-        /// a frame whose `(generation, token)` was read by the decode thread *after* the
-        /// fallback advanced the epoch (`flushDisplay()`), never a late in-flight frame from
-        /// the abandoned stream. This is a local ordering guarantee, not a wire identity —
-        /// nothing here inspects SSRCs or decoder instances. It drives the first-frame
-        /// watchdog event, so the codec-selection policy depends on this meaning.
+        /// "First frame of the replacement stream" after a codec fallback rests on two guards
+        /// with different reach (see `admitFrame` for the precise contract):
+        /// - the epoch token orders *callbacks* against the transition — it does NOT identify
+        ///   the stream that produced a frame's pixels, because a decode callback that begins
+        ///   after the fallback reads the new token even when its frame came from the
+        ///   abandoned stream;
+        /// - the H.265 provenance marker (`OverlookH265PixelBuffer`) travels with the frame
+        ///   itself, which is what actually refuses the abandoned stream's late frames.
+        /// Nothing here inspects SSRCs. This flag drives the first-frame watchdog event, so
+        /// the codec-selection policy depends on this meaning.
         var isFirstDecodedFrame: Bool
         /// Mirror of `WebRTCManager.isFrameCaptureEnabled` (OCR mode).
         var isFrameCaptureEnabled: Bool
@@ -66,6 +70,12 @@ final class VideoRenderControl: Sendable {
         /// the signal side and the display side agree by construction on which stream's frames
         /// count.
         var admittedToken: VideoDisplayEngine.RenderToken = .invalid
+        /// False from the codec-fallback transition onward: every frame decoded by our H.265
+        /// decoder is refused, no matter which epoch token its callback reads — the frame's
+        /// buffer class is the one identity that survives however late the callback runs.
+        /// Monotonic within a connection; only `setGeneration` (a new connection, which
+        /// restarts codec selection) re-arms it.
+        var admitsH265DecodedFrames = true
         var isFrameCaptureEnabled = false
         var suppressFrameArrivalSignals = false
         var lastFrameTime: CFTimeInterval?
@@ -76,7 +86,12 @@ final class VideoRenderControl: Sendable {
     // MARK: Main-actor writers
 
     func setGeneration(_ generation: Int) {
-        state.withLock { $0.generation = generation }
+        state.withLock {
+            $0.generation = generation
+            // A new connection restarts codec selection from scratch (the fallback decision is
+            // per-connection), so H.265-decoded frames are admissible again.
+            $0.admitsH265DecodedFrames = true
+        }
     }
 
     /// Adopts a new stream epoch: from here on only frames carrying `token` are counted.
@@ -86,6 +101,14 @@ final class VideoRenderControl: Sendable {
     /// stamping the health clock or claiming `isFirstDecodedFrame`.
     func setAdmittedToken(_ token: VideoDisplayEngine.RenderToken) {
         state.withLock { $0.admittedToken = token }
+    }
+
+    /// Arms or revokes admission for frames decoded by our H.265 decoder. The codec-fallback
+    /// transition revokes (`VideoRenderView.flushDisplayAbandoningH265Stream`), and revocation
+    /// must happen *before* the epoch advances: the marker — not the token — is what refuses an
+    /// abandoned-stream frame whose decode callback begins after the fallback.
+    func setAdmitsH265DecodedFrames(_ admits: Bool) {
+        state.withLock { $0.admitsH265DecodedFrames = admits }
     }
 
     func setFrameCaptureEnabled(_ enabled: Bool) {
@@ -113,17 +136,48 @@ final class VideoRenderControl: Sendable {
         state.withLock { $0.generation == generation }
     }
 
-    /// One lock acquisition per decoded frame: applies the generation *and* stream-epoch
-    /// guards, reads the gates and stamps the stream-health clock.
+    /// True while `token` is still the admitted stream epoch.
+    ///
+    /// Signal *delivery* revalidates against this: a first-frame signal admitted a moment
+    /// before a fallback queues a main-actor hop that cannot be retracted, so the receiver
+    /// (`WebRTCManager.videoRenderDidReceiveFirstFrame`) checks the delivered token again at
+    /// receipt and drops the stale delivery.
+    func isCurrentEpoch(_ token: VideoDisplayEngine.RenderToken) -> Bool {
+        state.withLock { $0.admittedToken == token && token != .invalid }
+    }
+
+    /// One lock acquisition per decoded frame: applies the generation, stream-epoch and H.265
+    /// provenance guards, reads the gates and stamps the stream-health clock.
+    ///
+    /// What the two stream guards each deliver, precisely:
+    /// - `token` is read by the decode thread when its callback begins, so it guards *callback
+    ///   ordering*: an admission that completes before an epoch transition publishes anything
+    ///   belongs to the old epoch, and one that overlaps the transition is refused (proof in
+    ///   `VideoRenderView.advanceEpoch`). It does NOT identify the stream that produced the
+    ///   frame's pixels — a callback that begins after the transition reads the new token even
+    ///   when its frame was decoded from the abandoned stream.
+    /// - `fromH265Decoder` is frame provenance: the marker class travels with the frame's
+    ///   buffer, so once the fallback revokes H.265 admission the abandoned stream's frames
+    ///   are refused regardless of when their callbacks run. The same-connection reissue only
+    ///   ever abandons H.265 for H.264 and never returns to H.265 within a connection
+    ///   (`CodecSelectionPolicy`), so provenance + token together close the fallback gap.
+    ///   Residual limits, stated honestly: the marker relies on WebRTC handing the renderer
+    ///   the decoder's own buffer instance (the property the zero-copy display path already
+    ///   depends on — if that ever broke, this degrades to the token-only ordering guarantee),
+    ///   and a hypothetical same-codec reissue inside one connection would be guarded by the
+    ///   token alone (no such path exists today).
     func admitFrame(
         generation: Int,
         token: VideoDisplayEngine.RenderToken,
+        fromH265Decoder: Bool,
         at time: CFTimeInterval
     ) -> FrameAdmission {
         state.withLock { state in
             guard state.generation == generation,
                   state.admittedToken == token,
-                  token != .invalid else { return .stale }
+                  token != .invalid,
+                  fromH265Decoder == false || state.admitsH265DecodedFrames
+            else { return .stale }
 
             if state.suppressFrameArrivalSignals {
                 return FrameAdmission(
@@ -156,7 +210,11 @@ final class VideoRenderControl: Sendable {
 /// first-frame watchdog event.
 @MainActor
 protocol VideoRenderSignalSink: AnyObject {
-    func videoRenderDidReceiveFirstFrame(generation: Int)
+    /// `token` is the stream epoch the frame was admitted in. The main-actor hop cannot be
+    /// retracted once queued, so the receiver must revalidate the token at receipt
+    /// (`VideoRenderControl.isCurrentEpoch`): a codec fallback may have advanced the epoch
+    /// while this delivery waited its turn.
+    func videoRenderDidReceiveFirstFrame(generation: Int, token: VideoDisplayEngine.RenderToken)
     func videoRenderDidMeasureFps(_ fps: Int, generation: Int)
     func videoRenderDidCaptureFrame(_ pixelBuffer: CVPixelBuffer, generation: Int)
     func videoRenderDidChangeSize(_ size: CGSize, generation: Int)
@@ -832,29 +890,82 @@ final class VideoRenderView: NSView, RTCVideoRenderer {
         engine.flush(token: advanceEpoch())
     }
 
+    /// The codec-fallback transition: revoke H.265-decoded frame admission, then
+    /// `flushDisplay()` — in the only safe order.
+    ///
+    /// Revocation comes FIRST because the token cannot refuse an abandoned-stream frame whose
+    /// decode callback begins after the epoch advances (it reads the new token; the frame's
+    /// buffer class is what carries H.265 provenance, not the callback's timing). Revoking
+    /// before the epoch advances leaves no instant at which such a frame can slip through:
+    /// before this call it is a legitimately admitted old-epoch frame (flushed from display
+    /// here, its clock stamp cleared by the caller right after, its first-frame delivery
+    /// revalidated at receipt); from this call on, the marker refuses it outright.
+    func flushDisplayAbandoningH265Stream() {
+        control.setAdmitsH265DecodedFrames(false)
+        flushDisplay()
+    }
+
     /// Moves the view to a fresh epoch and returns its token, publishing the same token to the
     /// control so the display epoch and the signal epoch advance in step by construction.
-    /// Callers are on the main actor; the lock is what the decode thread reads against.
+    /// Callers are on the main actor — transitions never race each other; the decode thread
+    /// only ever *reads* (`renderState` at callback start, the control inside `admitFrame`).
     ///
-    /// `renderState` and the control are updated one after the other, not atomically. That is
-    /// safe-fail: a frame that reads across the transition carries a token the control has not
-    /// adopted yet (or no longer admits) and is dropped — it can never be wrongly admitted.
+    /// The two publications cannot be atomic (two locks), so their ORDER is what makes the
+    /// transition safe-fail: the control's admitted token is published FIRST (C), `renderState`
+    /// SECOND (P). A decode callback performs R (read `renderState`) then A (`admitFrame`
+    /// against the control). R always precedes A, and C always precedes P, so every
+    /// interleaving is one of:
+    ///
+    ///   R A | C P — the admission completed before the transition published anything →
+    ///               correctly admitted into the OLD epoch. (Its display is dropped by the
+    ///               engine's serialized token check, its clock stamp is cleared by the
+    ///               fallback caller right after this returns, and its first-frame delivery is
+    ///               revalidated against the token at receipt.)
+    ///   R | C A P — A sees the new control token, the frame carries the old one → refused.
+    ///   R | C P A — same → refused.
+    ///   C | R A P — R still reads the old `renderState` token; the control is new → refused.
+    ///   C | R P A — same: R read the old token before P → refused.
+    ///   C P | R A — R sees the fully published new state → correctly admitted into the NEW
+    ///               epoch.
+    ///
+    /// So a frame is admitted only when its admission completes entirely before C or its read
+    /// happens entirely after P — never across the transition. With the REVERSED order
+    /// (`renderState` first) the interleaving R P A C wrongly admits: R reads the old token and
+    /// A matches it against the control's not-yet-updated old token, so a stale frame is
+    /// admitted mid-transition, stamps the freshly-cleared clock and fires first-frame. That is
+    /// the order `epochMidTransitionHookForTesting` exists to pin.
     private func advanceEpoch(generation: Int? = nil) -> VideoDisplayEngine.RenderToken {
-        let token = renderState.withLock { state in
-            Self.advanceToken(in: &state, generation: generation ?? state.generation)
+        // Reserve the next token value without publishing it to the decode thread's read.
+        let (token, newGeneration) = renderState.withLock { state in
+            let token = VideoDisplayEngine.RenderToken(rawValue: state.nextTokenValue)
+            state.nextTokenValue &+= 1
+            return (token, generation ?? state.generation)
         }
         control.setAdmittedToken(token)
+        epochMidTransitionHookForTesting?()
+        renderState.withLock { state in
+            state.generation = newGeneration
+            state.token = token
+        }
         return token
     }
 
-    private static nonisolated func advanceToken(
-        in state: inout RenderState,
-        generation: Int
-    ) -> VideoDisplayEngine.RenderToken {
-        state.generation = generation
-        state.token = VideoDisplayEngine.RenderToken(rawValue: state.nextTokenValue)
-        state.nextTokenValue &+= 1
-        return state.token
+    /// Test seam: runs between the two epoch publications (control token first, `renderState`
+    /// second), so a test can observe — and pin — the publication order `advanceEpoch` proves
+    /// safe. Nil in production; the frame path never touches it.
+    var epochMidTransitionHookForTesting: (() -> Void)?
+
+    /// The exact per-frame read `renderFrame` performs — a test seam for exercising the epoch
+    /// transition's interleavings deterministically.
+    var epochReadForTesting: (generation: Int, token: VideoDisplayEngine.RenderToken) {
+        renderState.withLock { ($0.generation, $0.token) }
+    }
+
+    /// Display-engine seams for tests; the frame path never touches them.
+    var displayStatsForTesting: VideoDisplayEngine.Stats { engine.currentStats }
+
+    func waitForDisplayEngineForTesting() {
+        engine.waitForPendingWork()
     }
 
     // MARK: RTCVideoRenderer
@@ -868,7 +979,16 @@ final class VideoRenderView: NSView, RTCVideoRenderer {
 
         let (generation, token) = renderState.withLock { ($0.generation, $0.token) }
         let now = CACurrentMediaTime()
-        let admission = control.admitFrame(generation: generation, token: token, at: now)
+        // Provenance is the frame's own buffer class — the one identity that survives however
+        // late this callback runs (see `VideoRenderControl.admitFrame`). One `isKindOfClass`,
+        // no lock, no main-thread work.
+        let fromH265Decoder = frame.buffer is OverlookH265PixelBuffer
+        let admission = control.admitFrame(
+            generation: generation,
+            token: token,
+            fromH265Decoder: fromH265Decoder,
+            at: now
+        )
         guard admission.isAdmitted else { return }
 
         if frame.rotation != ._0 {
@@ -886,8 +1006,10 @@ final class VideoRenderView: NSView, RTCVideoRenderer {
             && signalGate.shouldCaptureFrame(at: now)
 
         if admission.isFirstDecodedFrame {
+            // The token travels with the delivery: this task can be queued a moment before a
+            // fallback advances the epoch, and the sink revalidates the token at receipt.
             Task { @MainActor [weak self] in
-                self?.sink?.videoRenderDidReceiveFirstFrame(generation: generation)
+                self?.sink?.videoRenderDidReceiveFirstFrame(generation: generation, token: token)
             }
         }
 

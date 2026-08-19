@@ -51,7 +51,7 @@ final class VideoRenderViewTests: XCTestCase {
         control.setGeneration(7)
         control.setAdmittedToken(tokenOne)
 
-        let stale = control.admitFrame(generation: 6, token: tokenOne, at: 100)
+        let stale = control.admitFrame(generation: 6, token: tokenOne, fromH265Decoder: false, at: 100)
 
         XCTAssertEqual(stale, .stale)
         XCTAssertNil(
@@ -64,20 +64,9 @@ final class VideoRenderViewTests: XCTestCase {
         let control = VideoRenderControl()
 
         XCTAssertFalse(
-            control.admitFrame(generation: 0, token: tokenOne, at: 1).isAdmitted
+            control.admitFrame(generation: 0, token: tokenOne, fromH265Decoder: false, at: 1).isAdmitted
         )
         XCTAssertFalse(control.isCurrentGeneration(0))
-    }
-
-    func testAdmitFrameRejectsFramesBeforeAnyStreamEpochIsArmed() {
-        let control = VideoRenderControl()
-        control.setGeneration(1)
-
-        XCTAssertEqual(
-            control.admitFrame(generation: 1, token: .invalid, at: 1),
-            .stale,
-            "No frame can ever be admitted against the invalid epoch"
-        )
     }
 
     func testAdmitFrameReportsTheFirstDecodedFrameExactlyOncePerConnection() {
@@ -85,8 +74,8 @@ final class VideoRenderViewTests: XCTestCase {
         control.setGeneration(1)
         control.setAdmittedToken(tokenOne)
 
-        let first = control.admitFrame(generation: 1, token: tokenOne, at: 10)
-        let second = control.admitFrame(generation: 1, token: tokenOne, at: 11)
+        let first = control.admitFrame(generation: 1, token: tokenOne, fromH265Decoder: false, at: 10)
+        let second = control.admitFrame(generation: 1, token: tokenOne, fromH265Decoder: false, at: 11)
 
         XCTAssertTrue(first.isFirstDecodedFrame)
         XCTAssertFalse(second.isFirstDecodedFrame)
@@ -96,60 +85,10 @@ final class VideoRenderViewTests: XCTestCase {
         control.setGeneration(2)
         control.setAdmittedToken(tokenTwo)
         control.setLastFrameTime(nil)
-        XCTAssertTrue(control.admitFrame(generation: 2, token: tokenTwo, at: 12).isFirstDecodedFrame)
-    }
-
-    // MARK: - Stream-epoch guard (codec fallback inside one connection)
-
-    /// The codec-fallback bug: a fallback re-issues the Watch Request inside the same
-    /// connection, so `generation` does not change — only the stream epoch does. A late
-    /// in-flight frame from the abandoned stream must not be admitted: not displayed (its
-    /// admission is `.stale`, so `renderFrame` never hands it to the display engine — and the
-    /// engine's own token check drops it independently), not counted as `isFirstDecodedFrame`,
-    /// and not allowed to stamp the freshly-cleared stream-health clock.
-    func testAPreFallbackEpochFrameCannotClaimTheReplacementStreamsFirstFrame() {
-        let control = VideoRenderControl()
-        control.setGeneration(5)
-        control.setAdmittedToken(tokenOne)
-
-        // The abandoned stream was flowing before the fallback.
-        XCTAssertTrue(control.admitFrame(generation: 5, token: tokenOne, at: 10).isFirstDecodedFrame)
-
-        // The fallback: `flushDisplay()` advances the epoch, then the health clock is cleared
-        // to give the replacement stream its own initial-frame window.
-        control.setAdmittedToken(tokenTwo)
-        control.setLastFrameTime(nil)
-
-        // A frame decoded from the abandoned stream lands after the reissue.
-        let stale = control.admitFrame(generation: 5, token: tokenOne, at: 11)
-
-        XCTAssertEqual(stale, .stale, "Neither displayed nor counted")
-        XCTAssertFalse(stale.isFirstDecodedFrame)
-        XCTAssertNil(
-            control.lastFrameTime,
-            "The abandoned stream's frame must not stamp the health clock on the replacement stream's behalf"
-        )
-    }
-
-    func testTheFirstFrameOfTheNewEpochIsAdmittedCountedAndStampsTheClock() {
-        let control = VideoRenderControl()
-        control.setGeneration(5)
-        control.setAdmittedToken(tokenOne)
-        _ = control.admitFrame(generation: 5, token: tokenOne, at: 10)
-
-        // Fallback: epoch advances, clock cleared, then a stray old-epoch frame is rejected.
-        control.setAdmittedToken(tokenTwo)
-        control.setLastFrameTime(nil)
-        _ = control.admitFrame(generation: 5, token: tokenOne, at: 11)
-
-        let first = control.admitFrame(generation: 5, token: tokenTwo, at: 12)
-
-        XCTAssertTrue(first.isAdmitted, "The replacement stream's frame is displayed")
         XCTAssertTrue(
-            first.isFirstDecodedFrame,
-            "The first frame decoded after the reissue is the replacement stream's first frame"
+            control.admitFrame(generation: 2, token: tokenTwo, fromH265Decoder: false, at: 12)
+                .isFirstDecodedFrame
         )
-        XCTAssertEqual(control.lastFrameTime, 12, "… and it stamps the health clock")
     }
 
     func testAdmitFrameSuppressesSignalsWithoutStampingTheFrameClock() {
@@ -158,7 +97,7 @@ final class VideoRenderViewTests: XCTestCase {
         control.setAdmittedToken(tokenOne)
         control.setSuppressFrameArrivalSignals(true)
 
-        let admission = control.admitFrame(generation: 3, token: tokenOne, at: 20)
+        let admission = control.admitFrame(generation: 3, token: tokenOne, fromH265Decoder: false, at: 20)
 
         XCTAssertTrue(
             admission.isAdmitted,
@@ -174,13 +113,22 @@ final class VideoRenderViewTests: XCTestCase {
         control.setGeneration(4)
         control.setAdmittedToken(tokenOne)
 
-        XCTAssertFalse(control.admitFrame(generation: 4, token: tokenOne, at: 30).isFrameCaptureEnabled)
+        XCTAssertFalse(
+            control.admitFrame(generation: 4, token: tokenOne, fromH265Decoder: false, at: 30)
+                .isFrameCaptureEnabled
+        )
 
         control.setFrameCaptureEnabled(true)
-        XCTAssertTrue(control.admitFrame(generation: 4, token: tokenOne, at: 31).isFrameCaptureEnabled)
+        XCTAssertTrue(
+            control.admitFrame(generation: 4, token: tokenOne, fromH265Decoder: false, at: 31)
+                .isFrameCaptureEnabled
+        )
 
         control.setFrameCaptureEnabled(false)
-        XCTAssertFalse(control.admitFrame(generation: 4, token: tokenOne, at: 32).isFrameCaptureEnabled)
+        XCTAssertFalse(
+            control.admitFrame(generation: 4, token: tokenOne, fromH265Decoder: false, at: 32)
+                .isFrameCaptureEnabled
+        )
     }
 
     // MARK: - FPS window
@@ -353,31 +301,6 @@ final class VideoRenderViewTests: XCTestCase {
         XCTAssertNil(control.lastFrameTime)
     }
 
-    /// `flushDisplay()` moves the display epoch *and* the signal epoch together: after the
-    /// codec-fallback flush the view's own frames are still admitted (the two sides adopted
-    /// the same new token), so the replacement stream's first frame is not lost to the guard.
-    @MainActor
-    func testFlushDisplayAdvancesTheSignalEpochInStepWithTheView() throws {
-        let control = VideoRenderControl()
-        control.setGeneration(9)
-        let view = VideoRenderView(control: control, sink: nil)
-        let frame = RTCVideoFrame(buffer: try makeFrameBuffer(), rotation: ._0, timeStampNs: 0)
-
-        view.beginRendering(generation: 9)
-        view.renderFrame(frame)
-        XCTAssertNotNil(control.lastFrameTime, "The pre-fallback stream is flowing")
-
-        // The codec-fallback sequence: flush (epoch advance), then a fresh health window.
-        view.flushDisplay()
-        control.setLastFrameTime(nil)
-
-        view.renderFrame(frame)
-        XCTAssertNotNil(
-            control.lastFrameTime,
-            "A frame decoded after the flush belongs to the new epoch and is admitted"
-        )
-    }
-
     /// The closest thing to proving video actually renders without a live stream: put the view in
     /// a window, push decoded frames through `renderFrame` exactly as WebRTC's decode thread
     /// would, and ask the renderer for the image it is currently displaying.
@@ -450,6 +373,320 @@ final class VideoRenderViewTests: XCTestCase {
             memset(base, 128, bytes)
         }
         return pixelBuffer
+    }
+}
+
+// MARK: - Stream epochs (codec fallback inside one connection)
+
+/// Records first-frame deliveries exactly as `WebRTCManager` receives them, so the tests can
+/// assert what actually crosses the main-actor boundary — including the token the receiver
+/// revalidates at receipt.
+@MainActor
+private final class FirstFrameRecordingSink: VideoRenderSignalSink {
+    private(set) var firstFrames: [(generation: Int, token: VideoDisplayEngine.RenderToken)] = []
+
+    func videoRenderDidReceiveFirstFrame(generation: Int, token: VideoDisplayEngine.RenderToken) {
+        firstFrames.append((generation, token))
+    }
+
+    func videoRenderDidMeasureFps(_ fps: Int, generation: Int) {}
+    func videoRenderDidCaptureFrame(_ pixelBuffer: CVPixelBuffer, generation: Int) {}
+    func videoRenderDidChangeSize(_ size: CGSize, generation: Int) {}
+
+    /// Lets the decode path's queued `Task { @MainActor }` deliveries drain. Returns once
+    /// `count` deliveries arrived or the budget ran out — the caller asserts the exact count,
+    /// so waiting too long can only make the test slower, never wrong.
+    func drainDeliveries(expecting count: Int) async {
+        for _ in 0..<200 where firstFrames.count < count {
+            try? await Task.sleep(nanoseconds: 5_000_000)
+        }
+        // One extra beat so an *unexpected* additional delivery would still be observed.
+        try? await Task.sleep(nanoseconds: 20_000_000)
+    }
+}
+
+/// Coverage for the stream-epoch machinery as a whole: the control's token and H.265
+/// provenance predicates, the epoch transition's publication order, and the end-to-end
+/// fallback shape through a real `VideoRenderView`.
+final class VideoStreamEpochTests: XCTestCase {
+    private let tokenOne = VideoDisplayEngine.RenderToken(rawValue: 1)
+    private let tokenTwo = VideoDisplayEngine.RenderToken(rawValue: 2)
+
+    // MARK: - Token predicate (isolated)
+    //
+    // These pin `VideoRenderControl`'s token predicate on its own. They deliberately do NOT
+    // claim to cover the fallback behavior end to end — the token is read when a decode
+    // callback *begins*, so a callback that starts after the fallback reads the new token and
+    // this predicate alone cannot refuse it. The fallback shape as a whole is pinned by the
+    // `VideoRenderView`-level tests below.
+
+    func testAdmitFrameRejectsFramesBeforeAnyStreamEpochIsArmed() {
+        let control = VideoRenderControl()
+        control.setGeneration(1)
+
+        XCTAssertEqual(
+            control.admitFrame(generation: 1, token: .invalid, fromH265Decoder: false, at: 1),
+            .stale,
+            "No frame can ever be admitted against the invalid epoch"
+        )
+    }
+
+    func testAdmitFrameRefusesATokenTheControlNoLongerAdmits() {
+        let control = VideoRenderControl()
+        control.setGeneration(5)
+        control.setAdmittedToken(tokenOne)
+
+        // A frame was flowing under the old token.
+        XCTAssertTrue(
+            control.admitFrame(generation: 5, token: tokenOne, fromH265Decoder: false, at: 10)
+                .isFirstDecodedFrame
+        )
+
+        // The admitted token advances (same generation) and the clock is cleared.
+        control.setAdmittedToken(tokenTwo)
+        control.setLastFrameTime(nil)
+
+        // A frame still carrying the old token — one whose decode callback began before the
+        // transition — is refused.
+        let stale = control.admitFrame(generation: 5, token: tokenOne, fromH265Decoder: false, at: 11)
+
+        XCTAssertEqual(stale, .stale, "Neither displayed nor counted")
+        XCTAssertFalse(stale.isFirstDecodedFrame)
+        XCTAssertNil(control.lastFrameTime, "A refused frame must not stamp the health clock")
+    }
+
+    func testAdmitFrameTreatsTheFirstFrameOfTheNewTokenWithAClearedClockAsFirst() {
+        let control = VideoRenderControl()
+        control.setGeneration(5)
+        control.setAdmittedToken(tokenOne)
+        _ = control.admitFrame(generation: 5, token: tokenOne, fromH265Decoder: false, at: 10)
+
+        // Token advances, clock cleared; a stray old-token frame is refused in between.
+        control.setAdmittedToken(tokenTwo)
+        control.setLastFrameTime(nil)
+        _ = control.admitFrame(generation: 5, token: tokenOne, fromH265Decoder: false, at: 11)
+
+        let first = control.admitFrame(generation: 5, token: tokenTwo, fromH265Decoder: false, at: 12)
+
+        XCTAssertTrue(first.isAdmitted, "The new token's frame is displayed")
+        XCTAssertTrue(first.isFirstDecodedFrame)
+        XCTAssertEqual(control.lastFrameTime, 12, "… and it stamps the health clock")
+    }
+
+    // MARK: - H.265 provenance guard
+
+    /// The guard the token cannot provide: a decode callback for an abandoned-H.265-stream
+    /// frame that *begins* after the fallback reads the CURRENT token and would pass the epoch
+    /// check. Provenance travels with the frame (`OverlookH265PixelBuffer`), so revocation
+    /// refuses it even with the current token.
+    func testAdmitFrameRefusesH265DecodedFramesAfterRevocationEvenWithTheCurrentToken() {
+        let control = VideoRenderControl()
+        control.setGeneration(5)
+        control.setAdmittedToken(tokenOne)
+
+        // The fallback revokes H.265 admission, advances the epoch, clears the clock.
+        control.setAdmitsH265DecodedFrames(false)
+        control.setAdmittedToken(tokenTwo)
+        control.setLastFrameTime(nil)
+
+        // Worst case: the abandoned stream's frame arrives carrying the CURRENT token.
+        let stale = control.admitFrame(generation: 5, token: tokenTwo, fromH265Decoder: true, at: 11)
+
+        XCTAssertEqual(stale, .stale)
+        XCTAssertNil(control.lastFrameTime, "No clock stamp on the replacement stream's behalf")
+
+        // The replacement (H.264) stream's frames are unaffected.
+        let first = control.admitFrame(generation: 5, token: tokenTwo, fromH265Decoder: false, at: 12)
+        XCTAssertTrue(first.isAdmitted)
+        XCTAssertTrue(first.isFirstDecodedFrame, "The replacement stream still gets its first frame")
+    }
+
+    func testANewConnectionGenerationRearmsH265DecodedFrameAdmission() {
+        let control = VideoRenderControl()
+        control.setGeneration(5)
+        control.setAdmittedToken(tokenOne)
+        control.setAdmitsH265DecodedFrames(false)
+
+        // A new connection restarts codec selection, so H.265 may be tried again.
+        control.setGeneration(6)
+        control.setAdmittedToken(tokenTwo)
+
+        XCTAssertTrue(
+            control.admitFrame(generation: 6, token: tokenTwo, fromH265Decoder: true, at: 20)
+                .isAdmitted,
+            "Revocation is scoped to the connection that fell back"
+        )
+    }
+
+    // MARK: - Epoch revalidation at signal delivery
+
+    /// A first-frame signal's main-actor hop cannot be retracted once queued, so the receiver
+    /// revalidates the delivered token against this predicate at receipt.
+    func testIsCurrentEpochTracksTheAdmittedTokenAndNeverAcceptsInvalid() {
+        let control = VideoRenderControl()
+
+        XCTAssertFalse(control.isCurrentEpoch(.invalid), "Invalid never validates, even when armed")
+
+        control.setAdmittedToken(tokenOne)
+        XCTAssertTrue(control.isCurrentEpoch(tokenOne))
+        XCTAssertFalse(control.isCurrentEpoch(tokenTwo))
+
+        control.setAdmittedToken(tokenTwo)
+        XCTAssertFalse(
+            control.isCurrentEpoch(tokenOne),
+            "A delivery carrying the pre-fallback token is dropped at receipt"
+        )
+        XCTAssertTrue(control.isCurrentEpoch(tokenTwo))
+    }
+
+    // MARK: - Epoch transition publication order
+
+    /// Pins the transition's publication order: the control's admitted token FIRST, the
+    /// decode-thread-visible `renderState` SECOND (`VideoRenderView.advanceEpoch`).
+    ///
+    /// This exercises the vulnerable interleaving deterministically: a decode callback read
+    /// the OLD `(generation, token)` just before the transition and reaches `admitFrame`
+    /// mid-publication. With the reversed order the control would still hold the old token,
+    /// so the stale frame would be WRONGLY admitted — stamping the freshly-cleared clock and
+    /// firing first-frame. With the pinned order the control has already moved on and the
+    /// frame is refused. The hook runs between the two publications, so this test fails if
+    /// the order is ever swapped.
+    @MainActor
+    func testEpochTransitionPublishesTheControlTokenBeforeTheDecodeThreadVisibleState() throws {
+        let control = VideoRenderControl()
+        control.setGeneration(6)
+        let view = VideoRenderView(control: control, sink: nil)
+        view.beginRendering(generation: 6)
+
+        // R: the decode callback's read, taken before the transition begins.
+        let preTransitionRead = view.epochReadForTesting
+
+        struct MidTransitionObservation {
+            var controlMovedOn: Bool
+            var viewStillOld: Bool
+            var admission: VideoRenderControl.FrameAdmission
+        }
+        var midTransition: MidTransitionObservation?
+        view.epochMidTransitionHookForTesting = { [weak view] in
+            guard let view else { return }
+            midTransition = MidTransitionObservation(
+                controlMovedOn: control.isCurrentEpoch(preTransitionRead.token) == false,
+                viewStillOld: view.epochReadForTesting.token == preTransitionRead.token,
+                // A: the stale admission attempt, exactly mid-transition.
+                admission: control.admitFrame(
+                    generation: preTransitionRead.generation,
+                    token: preTransitionRead.token,
+                    fromH265Decoder: false,
+                    at: 50
+                )
+            )
+        }
+        view.flushDisplay()
+        view.epochMidTransitionHookForTesting = nil
+
+        let observed = try XCTUnwrap(midTransition, "The transition must pass through the seam")
+        XCTAssertTrue(observed.controlMovedOn, "C before P: the control token publishes first")
+        XCTAssertTrue(observed.viewStillOld, "renderState still holds the old epoch mid-transition")
+        XCTAssertEqual(
+            observed.admission,
+            .stale,
+            "A frame whose read and admission straddle the transition is refused, never admitted"
+        )
+        XCTAssertNil(control.lastFrameTime, "… so it cannot stamp the clock either")
+    }
+
+    // MARK: - The fallback, end to end through the view
+
+    /// `flushDisplay()` moves the display epoch *and* the signal epoch together: after the
+    /// codec-fallback flush the view's own frames are still admitted (the two sides adopted
+    /// the same new token), so the replacement stream's first frame is not lost to the guard.
+    @MainActor
+    func testFlushDisplayAdvancesTheSignalEpochInStepWithTheView() throws {
+        let control = VideoRenderControl()
+        control.setGeneration(9)
+        let view = VideoRenderView(control: control, sink: nil)
+        let frame = RTCVideoFrame(buffer: try makeFrameBuffer(), rotation: ._0, timeStampNs: 0)
+
+        view.beginRendering(generation: 9)
+        view.renderFrame(frame)
+        XCTAssertNotNil(control.lastFrameTime, "The pre-fallback stream is flowing")
+
+        // The codec-fallback sequence: flush (epoch advance), then a fresh health window.
+        view.flushDisplay()
+        control.setLastFrameTime(nil)
+
+        view.renderFrame(frame)
+        XCTAssertNotNil(
+            control.lastFrameTime,
+            "A frame decoded after the flush belongs to the new epoch and is admitted"
+        )
+    }
+
+    /// The end-to-end fallback shape, through a real `VideoRenderView` and sink: one
+    /// abandoned-stream (H.265) frame whose decode callback begins only AFTER the fallback —
+    /// the worst case, because it reads the NEW epoch token — does none of {display,
+    /// health-clock stamp, first-frame}, while the replacement stream's first frame does all
+    /// three.
+    @MainActor
+    func testAFallbackAbandonedStreamFrameDoesNothingWhileTheReplacementsFirstFrameDoesEverything() async throws {
+        let control = VideoRenderControl()
+        control.setGeneration(3)
+        let sink = FirstFrameRecordingSink()
+        let view = VideoRenderView(control: control, sink: sink)
+        view.beginRendering(generation: 3)
+
+        let abandonedStreamFrame = RTCVideoFrame(
+            buffer: OverlookH265PixelBuffer(
+                pixelBuffer: try makeNV12PixelBuffer(width: 320, height: 240)
+            ),
+            rotation: ._0,
+            timeStampNs: 0
+        )
+        let replacementFrame = RTCVideoFrame(buffer: try makeFrameBuffer(), rotation: ._0, timeStampNs: 0)
+
+        // The H.265 stream delivered nothing (which is why the watchdog fired). The manager's
+        // fallback sequence runs: revoke + flush + epoch advance, then a fresh health window.
+        view.flushDisplayAbandoningH265Stream()
+        control.setLastFrameTime(nil)
+        view.waitForDisplayEngineForTesting()
+        let statsAfterFallback = view.displayStatsForTesting
+
+        // A queued decode callback for an abandoned-stream frame begins only NOW — after the
+        // epoch advanced — so it reads the post-fallback token: the exact interleaving the
+        // token alone cannot refuse. Provenance is what stops it.
+        view.renderFrame(abandonedStreamFrame)
+        view.waitForDisplayEngineForTesting()
+
+        XCTAssertEqual(
+            view.displayStatsForTesting,
+            statsAfterFallback,
+            "The abandoned stream's frame never reaches the display engine"
+        )
+        XCTAssertNil(control.lastFrameTime, "… does not stamp the health clock")
+
+        // The replacement stream's first frame: displayed, stamped, signalled.
+        view.renderFrame(replacementFrame)
+        view.waitForDisplayEngineForTesting()
+
+        XCTAssertEqual(
+            view.displayStatsForTesting.enqueued,
+            statsAfterFallback.enqueued + 1,
+            "The replacement stream's frame is displayed"
+        )
+        XCTAssertNotNil(control.lastFrameTime, "… stamps the health clock")
+
+        await sink.drainDeliveries(expecting: 1)
+        XCTAssertEqual(
+            sink.firstFrames.count,
+            1,
+            "Exactly one first-frame signal: the replacement's, never the abandoned stream's"
+        )
+        let delivered = try XCTUnwrap(sink.firstFrames.first)
+        XCTAssertEqual(delivered.generation, 3)
+        XCTAssertTrue(
+            control.isCurrentEpoch(delivered.token),
+            "The delivery carries the admitted token, so the receiver's revalidation accepts it"
+        )
     }
 }
 

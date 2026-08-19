@@ -15,6 +15,9 @@
 static NSInteger const H265VideoCodecOK = 0;
 static NSInteger const H265VideoCodecError = -1;
 
+@implementation OverlookH265PixelBuffer
+@end
+
 @class RTCVideoDecoderH265;
 
 @interface H265DecodeContext : NSObject
@@ -60,7 +63,10 @@ static void H265DecompressionOutputCallback(
         return;
     }
 
-    RTCCVPixelBuffer *frameBuffer = [[RTCCVPixelBuffer alloc] initWithPixelBuffer:imageBuffer];
+    // The marker subclass, not RTCCVPixelBuffer: the buffer instance travels to the renderer
+    // as-is, so its class carries H.265 provenance for the codec-fallback admission guard.
+    OverlookH265PixelBuffer *frameBuffer =
+        [[OverlookH265PixelBuffer alloc] initWithPixelBuffer:imageBuffer];
     int64_t timeStampNs = (int64_t)((double)context.timestamp * (1000000000.0 / 90000.0));
     RTCVideoFrame *frame = [[RTCVideoFrame alloc] initWithBuffer:frameBuffer
                                                         rotation:RTCVideoRotation_0

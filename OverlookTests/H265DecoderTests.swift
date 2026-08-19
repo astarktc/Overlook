@@ -76,10 +76,14 @@ final class H265DecoderTests: XCTestCase {
 
         let lock = NSLock()
         var dimensions: [(Int32, Int32)] = []
+        var framesWithoutH265Provenance = 0
         let decoder = RTCVideoDecoderH265()
         decoder.setCallback { frame in
             lock.lock()
             dimensions.append((Int32(frame.width), Int32(frame.height)))
+            if !(frame.buffer is OverlookH265PixelBuffer) {
+                framesWithoutH265Provenance += 1
+            }
             lock.unlock()
             callbackExpectation.fulfill()
         }
@@ -118,6 +122,17 @@ final class H265DecoderTests: XCTestCase {
         lock.unlock()
         XCTAssertTrue(decodeErrors.isEmpty, "Decode errors: \(decodeErrors)", file: file, line: line)
         XCTAssertEqual(decodedDimensions.count, fixture.sliceCount, file: file, line: line)
+        lock.lock()
+        let untagged = framesWithoutH265Provenance
+        lock.unlock()
+        XCTAssertEqual(
+            untagged,
+            0,
+            "Every decoded frame must carry H.265 provenance (OverlookH265PixelBuffer) — the "
+                + "codec-fallback admission guard depends on it",
+            file: file,
+            line: line
+        )
         XCTAssertTrue(
             decodedDimensions.allSatisfy { $0 == (2560, 1440) },
             "Unexpected output dimensions: \(Set(decodedDimensions.map { "\($0.0)x\($0.1)" }))",

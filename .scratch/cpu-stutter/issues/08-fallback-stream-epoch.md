@@ -2,7 +2,7 @@
 
 **Found by:** adversarial review of ticket 06 (`AVSampleBufferDisplayLayer` renderer). Deliberately **not** fixed there because it is **pre-existing behavior, not a regression** — the `ConnectionGenerationVideoRenderer` that ticket 06 replaced had exactly the same gap.
 
-**Status:** in-review — `fix/fallback-stream-epoch`: `VideoRenderControl.admitFrame` now guards on the render token (stream epoch) alongside generation; `flushDisplay()`/`begin`/`end` publish the token to the control, and the fallback flush runs before the health-clock clear. Unit tests added; full suite green.
+**Status:** ready-for-human — awaiting review of `fix/fallback-stream-epoch`. `VideoRenderControl.admitFrame` guards on generation, the render token (stream epoch) *and* H.265 frame provenance (`OverlookH265PixelBuffer`, tagged by our decoder and travelling with the frame — the token alone cannot refuse an abandoned-stream decode callback that begins after the fallback). The fallback path revokes H.265 admission before advancing the epoch (`flushDisplayAbandoningH265Stream`), the epoch transition publishes the control token before the decode-thread-visible state (interleaving proof in `advanceEpoch`), and first-frame delivery carries the token for revalidation at receipt. Unit tests cover the publication order, the provenance guard, the decoder's tagging, and the end-to-end fallback shape; full suite green.
 
 **Blocked by:** none
 

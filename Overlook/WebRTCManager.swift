@@ -699,13 +699,15 @@ class WebRTCManager: NSObject, ObservableObject {
         switch action {
         case .reissueVideoWatchRequest(let videoFormat):
             // The replacement stream is a different codec (and possibly a different resolution);
-            // anything still queued for display belongs to the stream being abandoned. The flush
-            // also advances the stream epoch on the display side *and* the signal side
-            // (`VideoRenderControl`'s admitted token), and it must happen *before* the health
-            // clock is cleared below: otherwise a late in-flight frame from the abandoned
-            // stream could stamp the freshly-nil clock and claim to be the replacement
-            // stream's first decoded frame, disarming the first-frame watchdog.
-            videoView?.flushDisplay()
+            // anything still queued for display belongs to the H.265 stream being abandoned.
+            // This revokes admission for H.265-decoded frames (provenance travels with the
+            // frame's buffer, so an abandoned-stream decode callback that begins only after
+            // this transition is still refused) and advances the stream epoch on the display
+            // side *and* the signal side. It must happen *before* the health clock is cleared
+            // below: otherwise a late in-flight frame from the abandoned stream could stamp
+            // the freshly-nil clock and claim to be the replacement stream's first decoded
+            // frame, disarming the first-frame watchdog.
+            videoView?.flushDisplayAbandoningH265Stream()
             // Give the replacement stream its own initial-frame health window.
             setLastVideoFrameTime(nil)
             setLastVideoFrameAgeSeconds(nil)
@@ -1887,12 +1889,18 @@ extension WebRTCManager: @preconcurrency RTCDataChannelDelegate {
 // event, at most twice a second for fps, at most ~12 times a second while OCR capture is on, and
 // whenever the track's frame size changes.
 extension WebRTCManager: VideoRenderSignalSink {
-    func videoRenderDidReceiveFirstFrame(generation: Int) {
+    func videoRenderDidReceiveFirstFrame(generation: Int, token: VideoDisplayEngine.RenderToken) {
         guard connectionGeneration == generation else { return }
+        // The render path queued this hop before the main actor got a turn, and it cannot be
+        // retracted; a codec fallback may have advanced the stream epoch in between. So the
+        // token is revalidated at receipt: a first frame admitted for a stream that has since
+        // been abandoned must neither reset the reconnect budget nor disarm the watchdog.
+        guard renderControl.isCurrentEpoch(token) else { return }
 
         iceAutomaticReconnectAttempts = 0
         Task { @MainActor [weak self] in
-            guard let self, self.connectionGeneration == generation else { return }
+            guard let self, self.connectionGeneration == generation,
+                  self.renderControl.isCurrentEpoch(token) else { return }
             _ = await self.handleFirstFrameWatchdogEvent(
                 .firstDecodedFrameArrived,
                 generation: generation
