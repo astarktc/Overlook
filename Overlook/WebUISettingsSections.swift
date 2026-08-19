@@ -28,8 +28,6 @@ struct VideoSettingsSection: View {
     ]
 
     var body: some View {
-        // [DEBUG-swiftui-audit]
-        let _ = DiagFlags.printChanges ? Self._printChanges() : ()
         DisclosureGroup("Video", isExpanded: $isExpanded) {
             VStack(alignment: .leading, spacing: 10) {
                 let modeBinding = actions.bindingString(
@@ -146,8 +144,6 @@ struct StreamerParamsSection: View {
     private var streamerLimits: GLKVMStreamerState.Limits? { actions.streamerLimits }
 
     var body: some View {
-        // [DEBUG-swiftui-audit]
-        let _ = DiagFlags.printChanges ? Self._printChanges() : ()
         VStack(alignment: .leading, spacing: 8) {
             Text("Streamer")
                 .font(.subheadline)
@@ -322,8 +318,6 @@ struct RemoteSettingsSection: View {
     ]
 
     var body: some View {
-        // [DEBUG-swiftui-audit]
-        let _ = DiagFlags.printChanges ? Self._printChanges() : ()
         DisclosureGroup("Remote device settings", isExpanded: $isExpanded) {
             VStack(alignment: .leading, spacing: 10) {
                 Toggle("Mouse Control", isOn: actions.bindingBool(
@@ -435,8 +429,6 @@ struct KeyboardSettingsSection: View {
     let actions: WebUISettingsActions
 
     var body: some View {
-        // [DEBUG-swiftui-audit]
-        let _ = DiagFlags.printChanges ? Self._printChanges() : ()
         DisclosureGroup("Keyboard settings", isExpanded: $isExpanded) {
             VStack(alignment: .leading, spacing: 10) {
                 Picker("Keymap", selection: actions.bindingString(
@@ -485,8 +477,6 @@ struct AudioSettingsSection: View {
     @AppStorage("overlook.audio.outputDeviceUID") private var audioOutputDeviceUID: String = ""
 
     var body: some View {
-        // [DEBUG-swiftui-audit]
-        let _ = DiagFlags.printChanges ? Self._printChanges() : ()
         DisclosureGroup("Audio", isExpanded: $isExpanded) {
             VStack(alignment: .leading, spacing: 10) {
                 Toggle("Audio", isOn: $webRTCManager.audioEnabled)
@@ -550,8 +540,6 @@ struct SystemSettingsSection: View {
     ]
 
     var body: some View {
-        // [DEBUG-swiftui-audit]
-        let _ = DiagFlags.printChanges ? Self._printChanges() : ()
         DisclosureGroup("System", isExpanded: $isExpanded) {
             VStack(alignment: .leading, spacing: 10) {
                 Picker("App appearance", selection: $appAppearance) {
@@ -584,8 +572,6 @@ struct NetworkSettingsSection: View {
     @Binding var isExpanded: Bool
 
     var body: some View {
-        // [DEBUG-swiftui-audit]
-        let _ = DiagFlags.printChanges ? Self._printChanges() : ()
         DisclosureGroup("Network", isExpanded: $isExpanded) {
             VStack(alignment: .leading, spacing: 10) {
                 NotImplementedRow(title: "Modify")
@@ -606,8 +592,6 @@ struct AdvancedSettingsSection: View {
     let actions: WebUISettingsActions
 
     var body: some View {
-        // [DEBUG-swiftui-audit]
-        let _ = DiagFlags.printChanges ? Self._printChanges() : ()
         DisclosureGroup("Advanced", isExpanded: $isExpanded) {
             VStack(alignment: .leading, spacing: 10) {
                 Button("Reset KVM") {

@@ -1232,26 +1232,18 @@ class WebRTCManager: NSObject, ObservableObject {
                 let now = CACurrentMediaTime()
 
                 if self.isConnected == false {
-                    // [DEBUG-swiftui-audit] OVERLOOK_DIAG_NO_HEALTH=1 skips the @Published writes,
-                    // control flow (and the watchdog below) is left intact.
-                    if DiagFlags.noHealth == false {
-                        self.setStreamStalled(false)
-                        self.setLastVideoFrameAgeSeconds(nil)
-                    }
+                    self.setStreamStalled(false)
+                    self.setLastVideoFrameAgeSeconds(nil)
                     return
                 }
 
                 let lastFrame = self.getLastVideoFrameTime()
                 let age = lastFrame.map { now - $0 }
 
-                // [DEBUG-swiftui-audit]
-                if DiagFlags.noHealth == false {
-                    self.setLastVideoFrameAgeSeconds(age.map { max(0, Int($0.rounded())) })
-                }
+                self.setLastVideoFrameAgeSeconds(age.map { max(0, Int($0.rounded())) })
 
                 if let age, age > self.streamStallThresholdSeconds {
-                    // [DEBUG-swiftui-audit]
-                    if DiagFlags.noHealth == false, self.isStreamStalled == false {
+                    if self.isStreamStalled == false {
                         self.isStreamStalled = true
                         self.lastDisconnectReason = "Video stream stalled"
                     }
@@ -1269,16 +1261,14 @@ class WebRTCManager: NSObject, ObservableObject {
                         return
                     }
                     guard self.connectionGeneration == generation else { return }
-                    // [DEBUG-swiftui-audit]
-                    if DiagFlags.noHealth == false, self.isStreamStalled == false {
+                    if self.isStreamStalled == false {
                         self.isStreamStalled = true
                         self.lastDisconnectReason = "Video stream stalled"
                     }
                     return
                 }
 
-                // [DEBUG-swiftui-audit]
-                if DiagFlags.noHealth == false, self.isStreamStalled {
+                if self.isStreamStalled {
                     self.isStreamStalled = false
                     self.lastDisconnectReason = nil
                 }
@@ -1290,9 +1280,6 @@ class WebRTCManager: NSObject, ObservableObject {
     /// telemetry change. The class is already `@MainActor`, so no hops are needed — every
     /// extra hop used to split one tick into several SwiftUI transactions.
     private func measureStreamStats() async {
-        // [DEBUG-swiftui-audit] OVERLOOK_DIAG_NO_STATS=1 disables all video+audio stats publishing.
-        if DiagFlags.noStats { return }
-
         guard let peerConnection else {
             telemetry.update { snapshot in
                 snapshot.apply(video: .empty)
@@ -1598,8 +1585,6 @@ class WebRTCManager: NSObject, ObservableObject {
     }
     
     private func measureLatency() async {
-        // [DEBUG-swiftui-audit] OVERLOOK_DIAG_NO_STATS=1 disables the periodic latency ping.
-        if DiagFlags.noStats { return }
         latencyMeasurementStart = Date()
         
         // Send ping message through data channel
@@ -1912,8 +1897,6 @@ extension WebRTCManager: VideoRenderSignalSink {
 
     func videoRenderDidMeasureFps(_ fps: Int, generation: Int) {
         guard connectionGeneration == generation else { return }
-        // [DEBUG-swiftui-audit] OVERLOOK_DIAG_NO_FPS=1 skips the fps telemetry write.
-        guard DiagFlags.noFps == false else { return }
         // Already quantized to whole frames the way the UI renders it, so the ≤ 2 Hz window only
         // publishes when the displayed number actually moves.
         telemetry.update { $0.videoFps = fps }

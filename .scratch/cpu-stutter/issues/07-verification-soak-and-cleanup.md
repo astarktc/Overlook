@@ -11,9 +11,10 @@ Procedure:
 
 **Blocked by:** 01, 02, 03, 04, 05, 06.
 
-**Status:** ready-for-agent
+**Status:** done (2026-08-18)
 
-- [ ] Multi-hour Release soak on 4K external: `loop.sh` GREEN throughout, `soak.log` shows no upward CPU/layout trend
-- [ ] No visible stutter under normal use (user confirmation)
-- [ ] `grep -rn "DEBUG-swiftui-audit" Overlook/` returns nothing
-- [ ] Post-mortem note written
+- [x] Stutter-immunity demo: Release build + `OVERLOOK_DIAG_STALL_MAIN=1` → video glides (user-confirmed; UI glides too)
+- [x] Multi-hour Release soak — waived by user; normal daily use is the ongoing test (failure will be reported). Debug soak: ~2h flat (CPU ~5%, layout 0%, RSS 224MB, evals 0)
+- [x] No visible stutter under normal use (user confirmation)
+- [x] `grep -rn "DEBUG-swiftui-audit" Overlook/` returns nothing; `DiagFlags.swift` removed from both targets + pbxproj; `VideoSurfaceView` lint renames kept; instrumentation preserved at git tag `cpu-stutter-instrumented` (pointer in AGENTS.md)
+- [x] Post-mortem / Apple Feedback write-up — skipped by user decision; `measurements.md` is the record

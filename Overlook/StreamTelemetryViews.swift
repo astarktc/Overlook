@@ -9,8 +9,6 @@ struct ConnectionLatencyLabel: View {
     @EnvironmentObject private var telemetryModel: StreamTelemetryModel
 
     var body: some View {
-        // [DEBUG-swiftui-audit]
-        let _ = DiagFlags.printChanges ? Self._printChanges() : ()
         Text("Latency: \(telemetryModel.snapshot.latencyMs)ms")
             .font(.caption)
     }
@@ -28,8 +26,6 @@ struct StreamStatsSection: View {
     let videoSize: CGSize?
 
     var body: some View {
-        // [DEBUG-swiftui-audit]
-        let _ = DiagFlags.printChanges ? Self._printChanges() : ()
         let telemetry = telemetryModel.snapshot
 
         let resolutionText: String = {

@@ -9,12 +9,6 @@ import Network
 struct OverlookApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
-    init() {
-        // [DEBUG-swiftui-audit] OVERLOOK_DIAG_STALL_MAIN=1 installs the 1 Hz / 200 ms main-thread
-        // stall the video renderer is expected to be immune to.
-        MainThreadStallInjector.startIfEnabled()
-    }
-
     var body: some Scene {
         WindowGroup {
             ContentView()

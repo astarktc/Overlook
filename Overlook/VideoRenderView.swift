@@ -849,10 +849,6 @@ final class VideoRenderView: NSView, RTCVideoRenderer {
         let shouldCaptureFrame = admission.isFrameCaptureEnabled
             && signalGate.shouldCaptureFrame(at: now)
 
-        // [DEBUG-swiftui-audit] OVERLOOK_DIAG_NO_RENDER_HOP=1 keeps video flowing and keeps the
-        // accounting above, but drops every main-actor hop out of the render path.
-        guard DiagFlags.noRenderHop == false else { return }
-
         if admission.isFirstDecodedFrame {
             Task { @MainActor [weak self] in
                 self?.sink?.videoRenderDidReceiveFirstFrame(generation: generation)

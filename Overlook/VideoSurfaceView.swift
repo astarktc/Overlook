@@ -32,8 +32,6 @@ struct VideoSurfaceView: View {
     }
 
     var body: some View {
-        // [DEBUG-swiftui-audit]
-        let _ = DiagFlags.printChanges ? Self._printChanges() : ()
         GeometryReader { geometry in
             ZStack {
                 Color.black

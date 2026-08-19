@@ -114,8 +114,6 @@ struct ContentView: View {
     /// owner is `WindowAspectRatioSetter.Coordinator`'s fullscreen chrome logic.
     @MainActor
     private func applyWindowTitle(_ title: String) {
-        // [DEBUG-swiftui-audit]
-        if DiagFlags.noWindowSetters { return }
         guard let window = windowRef else { return }
         guard window.title != title else { return }
         window.title = title
@@ -133,8 +131,6 @@ struct ContentView: View {
     }
     
     var body: some View {
-        // [DEBUG-swiftui-audit]
-        let _ = DiagFlags.printChanges ? Self._printChanges() : ()
         ZStack(alignment: .trailing) {
             if isFullscreen {
                 VideoSurfaceView(
@@ -668,8 +664,6 @@ private struct WindowAspectRatioSetter: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        // [DEBUG-swiftui-audit]
-        if DiagFlags.noWindowSetters { return }
         guard let window = nsView.window else { return }
 
         if context.coordinator.didConfigureWindow == false {
@@ -943,8 +937,6 @@ struct ConnectionsPopoverView: View {
     let onForgetSelectedDevice: () -> Void
 
     var body: some View {
-        // [DEBUG-swiftui-audit]
-        let _ = DiagFlags.printChanges ? Self._printChanges() : ()
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Connections")

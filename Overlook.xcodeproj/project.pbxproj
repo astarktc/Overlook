@@ -63,8 +63,6 @@
 		01000041 /* WebRTCFactoryBuilder.m in Sources */ = {isa = PBXBuildFile; fileRef = 02000021 /* WebRTCFactoryBuilder.m */; };
 		01000037 /* CodecPreferenceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000035 /* CodecPreferenceStore.swift */; };
 		01000038 /* CodecPreferenceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000035 /* CodecPreferenceStore.swift */; };
-		01000042 /* DiagFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000038 /* DiagFlags.swift */; };
-		01000043 /* DiagFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000038 /* DiagFlags.swift */; };
 		01000044 /* StreamTelemetry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000039 /* StreamTelemetry.swift */; };
 		01000045 /* StreamTelemetry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000039 /* StreamTelemetry.swift */; };
 		01000046 /* StreamTelemetryViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200003A /* StreamTelemetryViews.swift */; };
@@ -125,7 +123,6 @@
 		02000036 /* WebRTCBinaryH265SupportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCBinaryH265SupportTests.swift; sourceTree = "<group>"; };
 		02000037 /* H265LiveWireDiagnosticTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = H265LiveWireDiagnosticTests.swift; sourceTree = "<group>"; };
 		02000035 /* CodecPreferenceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodecPreferenceStore.swift; sourceTree = "<group>"; };
-		02000038 /* DiagFlags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagFlags.swift; sourceTree = "<group>"; };
 		02000039 /* StreamTelemetry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamTelemetry.swift; sourceTree = "<group>"; };
 		0200003A /* StreamTelemetryViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamTelemetryViews.swift; sourceTree = "<group>"; };
 		0200003B /* WebUISettingsPanelModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebUISettingsPanelModel.swift; sourceTree = "<group>"; };
@@ -190,7 +187,6 @@
 				02000049 /* WebUISettingsActions.swift */,
 				0200004A /* WebUISettingsSections.swift */,
 				02000039 /* StreamTelemetry.swift */,
-				02000038 /* DiagFlags.swift */,
 				02000017 /* OCRViews.swift */,
 				02000018 /* ConnectSheets.swift */,
 				02000016 /* WebUISettingsPanel.swift */,
@@ -391,7 +387,6 @@
 				01000049 /* WebUISettingsActions.swift in Sources */,
 				0100004A /* WebUISettingsSections.swift in Sources */,
 				01000044 /* StreamTelemetry.swift in Sources */,
-				01000042 /* DiagFlags.swift in Sources */,
 				01000017 /* WebUISettingsPanel.swift in Sources */,
 				01000018 /* OCRViews.swift in Sources */,
 				01000019 /* ConnectSheets.swift in Sources */,
@@ -428,7 +423,6 @@
 				0100004C /* VideoRenderView.swift in Sources */,
 				0100004D /* VideoRenderViewTests.swift in Sources */,
 				01000045 /* StreamTelemetry.swift in Sources */,
-				01000043 /* DiagFlags.swift in Sources */,
 				0100003C /* KVMDeviceManager.swift in Sources */,
 				0100003D /* GLKVMClient.swift in Sources */,
 				0100003E /* JSONValue.swift in Sources */,
