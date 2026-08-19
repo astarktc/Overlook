@@ -14,3 +14,274 @@
 18:43:24 up=18:00 cpu=17.8 mt=0 layout=1 layout%=0 evals60s=302
 18:44:25 up=19:01 cpu=16.1 mt=2568 layout=1 layout%=0 evals60s=279
 18:45:25 up=20:01 cpu=25.4 mt=2572 layout=4 layout%=0 evals60s=303
+18:46:25 up=21:01 cpu=24.1 mt=2568 layout=2 layout%=0 evals60s=302
+18:47:25 up=22:01 cpu=20.3 mt=2580 layout=3 layout%=0 evals60s=303
+18:48:26 up=23:02 cpu=31.8 mt=2554 layout=2 layout%=0 evals60s=279
+18:49:26 up=24:02 cpu=23.5 mt=0 layout=7 layout%=0 evals60s=303
+18:50:27 up=25:03 cpu=40.8 mt=2573 layout=2 layout%=0 evals60s=302
+18:51:27 up=26:03 cpu=24.2 mt=2568 layout=4 layout%=0 evals60s=303
+18:52:27 up=27:03 cpu=14.3 mt=0 layout=296 layout%=0 evals60s=279
+18:53:28 up=28:04 cpu=32.9 mt=2566 layout=1 layout%=0 evals60s=303
+18:54:28 up=29:04 cpu=19.7 mt=2565 layout=3 layout%=0 evals60s=302
+18:55:29 up=30:05 cpu=48.1 mt=2534 layout=2 layout%=0 evals60s=303
+18:56:29 up=31:05 cpu=23.6 mt=2563 layout=4 layout%=0 evals60s=279
+18:57:29 up=32:05 cpu=28.6 mt=2533 layout=3 layout%=0 evals60s=303
+18:58:30 up=33:06 cpu=33.8 mt=2559 layout=336 layout%=13 evals60s=302
+18:59:30 up=34:06 cpu=27.0 mt=2570 layout=1 layout%=0 evals60s=279
+18:59:53 up=34:29 cpu=32.8 mt=2584 layout=339 layout%=13 rss=430MB evals60s=9962
+19:00:30 up=35:06 cpu=20.5 mt=2548 layout=2 layout%=0 evals60s=303
+19:00:53 up=35:29 cpu=29.5 mt=0 layout=4 layout%=0 rss=482MB evals60s=303
+19:01:31 up=36:07 cpu=28.1 mt=2526 layout=1 layout%=0 evals60s=303
+19:01:53 up=36:29 cpu=20.6 mt=2574 layout=4 layout%=0 rss=422MB evals60s=279
+19:02:32 up=37:08 cpu=23.6 mt=2553 layout=2 layout%=0 evals60s=279
+19:02:54 up=37:30 cpu=46.1 mt=0 layout=2 layout%=0 rss=484MB evals60s=302
+19:03:32 up=38:08 cpu=34.5 mt=2561 layout=1 layout%=0 evals60s=303
+19:03:54 up=38:30 cpu=28.4 mt=2561 layout=1 layout%=0 rss=430MB evals60s=303
+19:04:32 up=39:08 cpu=23.4 mt=0 layout=1 layout%=0 evals60s=302
+19:04:54 up=39:30 cpu=23.1 mt=2563 layout=2 layout%=0 rss=481MB evals60s=303
+19:05:32 up=40:08 cpu=27.6 mt=2561 layout=3 layout%=0 evals60s=303
+19:05:55 up=40:31 cpu=44.9 mt=2573 layout=2 layout%=0 rss=432MB evals60s=279
+19:06:33 up=41:09 cpu=56.6 mt=2576 layout=1 layout%=0 evals60s=279
+19:06:55 up=41:31 cpu=33.9 mt=2562 layout=386 layout%=15 rss=433MB evals60s=302
+19:07:33 up=42:09 cpu=24.2 mt=2571 layout=6 layout%=0 evals60s=303
+19:07:55 up=42:31 cpu=32.2 mt=2585 layout=1 layout%=0 rss=435MB evals60s=303
+19:08:33 up=43:09 cpu=17.4 mt=2562 layout=396 layout%=15 evals60s=302
+19:08:56 up=43:32 cpu=50.5 mt=0 layout=1 layout%=0 rss=494MB evals60s=279
+19:09:34 up=44:10 cpu=50.1 mt=0 layout=4 layout%=0 evals60s=279
+19:09:56 up=44:32 cpu=57.3 mt=2557 layout=2 layout%=0 rss=447MB evals60s=303
+19:10:34 up=45:10 cpu=26.8 mt=2537 layout=1 layout%=0 evals60s=303
+19:10:56 up=45:32 cpu=23.0 mt=2572 layout=1 layout%=0 rss=443MB evals60s=302
+19:11:35 up=46:11 cpu=21.8 mt=0 layout=371 layout%=0 evals60s=302
+19:11:57 up=46:33 cpu=19.0 mt=2328 layout=4 layout%=0 rss=450MB evals60s=280
+19:12:35 up=47:11 cpu=36.9 mt=2316 layout=2 layout%=0 evals60s=280
+19:12:57 up=00:16 cpu=0.2 mt=2329 layout=1 layout%=0 rss=75MB evals60s=209
+19:13:57 up=01:16 cpu=5.7 mt=2524 layout=2 layout%=0 rss=114MB evals60s=0
+19:14:58 up=02:17 cpu=16.3 mt=2495 layout=5 layout%=0 rss=221MB evals60s=0
+19:15:58 up=03:17 cpu=34.3 mt=0 layout=3 layout%=0 rss=290MB evals60s=0
+19:16:58 up=04:17 cpu=15.2 mt=2498 layout=5 layout%=0 rss=245MB evals60s=0
+19:17:58 up=05:17 cpu=13.3 mt=2545 layout=1 layout%=0 rss=191MB evals60s=0
+19:18:59 up=06:18 cpu=12.5 mt=2564 layout=1 layout%=0 rss=192MB evals60s=0
+19:19:59 up=07:18 cpu=11.0 mt=0 layout=4 layout%=0 rss=197MB evals60s=0
+19:21:00 up=08:19 cpu=15.3 mt=2500 layout=6 layout%=0 rss=251MB evals60s=0
+19:22:00 up=09:19 cpu=15.6 mt=2510 layout=2 layout%=0 rss=195MB evals60s=0
+19:23:00 up=10:19 cpu=12.3 mt=2520 layout=2 layout%=0 rss=195MB evals60s=0
+19:24:01 up=11:20 cpu=14.4 mt=0 layout=5 layout%=0 rss=195MB evals60s=0
+19:25:01 up=12:20 cpu=12.1 mt=2536 layout=4 layout%=0 rss=249MB evals60s=0
+19:26:01 up=13:20 cpu=10.6 mt=2568 layout=1 layout%=0 rss=190MB evals60s=0
+19:27:02 up=14:21 cpu=16.2 mt=2511 layout=3 layout%=0 rss=190MB evals60s=0
+19:28:02 up=15:21 cpu=10.7 mt=2529 layout=3 layout%=0 rss=190MB evals60s=0
+19:29:02 up=16:21 cpu=14.9 mt=2512 layout=2 layout%=0 rss=190MB evals60s=0
+19:30:02 up=17:21 cpu=14.3 mt=2557 layout=4 layout%=0 rss=190MB evals60s=0
+19:31:03 up=18:22 cpu=10.2 mt=2527 layout=4 layout%=0 rss=196MB evals60s=0
+19:32:03 up=19:22 cpu=10.2 mt=2324 layout=2 layout%=0 rss=196MB evals60s=0
+19:33:03 up=20:22 cpu=13.7 mt=2289 layout=8 layout%=0 rss=190MB evals60s=0
+19:34:04 up=21:23 cpu=12.9 mt=0 layout=2 layout%=0 rss=191MB evals60s=0
+19:35:04 up=22:23 cpu=13.1 mt=2579 layout=1 layout%=0 rss=244MB evals60s=0
+19:36:05 up=23:24 cpu=9.8 mt=2565 layout=1 layout%=0 rss=191MB evals60s=0
+19:37:05 up=24:24 cpu=12.8 mt=2516 layout=4 layout%=0 rss=197MB evals60s=0
+19:38:05 up=25:24 cpu=14.3 mt=2515 layout=8 layout%=0 rss=197MB evals60s=0
+19:39:06 up=26:25 cpu=13.0 mt=2560 layout=1 layout%=0 rss=197MB evals60s=0
+19:40:06 up=27:25 cpu=11.5 mt=2546 layout=5 layout%=0 rss=202MB evals60s=0
+19:41:06 up=28:25 cpu=15.1 mt=2300 layout=4 layout%=0 rss=197MB evals60s=0
+19:42:06 up=29:25 cpu=14.2 mt=2361 layout=7 layout%=0 rss=197MB evals60s=0
+19:43:07 up=30:26 cpu=16.5 mt=2305 layout=3 layout%=0 rss=197MB evals60s=0
+19:44:07 up=31:26 cpu=16.3 mt=2348 layout=4 layout%=0 rss=192MB evals60s=0
+19:45:07 up=32:26 cpu=11.8 mt=2329 layout=2 layout%=0 rss=197MB evals60s=0
+19:46:08 up=33:27 cpu=15.3 mt=2313 layout=9 layout%=0 rss=197MB evals60s=0
+19:47:08 up=34:27 cpu=12.7 mt=2316 layout=2 layout%=0 rss=197MB evals60s=0
+19:48:08 up=35:27 cpu=14.7 mt=0 layout=1 layout%=0 rss=197MB evals60s=0
+19:49:08 up=36:27 cpu=11.8 mt=2362 layout=1 layout%=0 rss=197MB evals60s=0
+19:50:09 up=37:28 cpu=10.9 mt=2401 layout=5 layout%=0 rss=197MB evals60s=0
+19:51:09 up=38:28 cpu=12.7 mt=2332 layout=9 layout%=0 rss=197MB evals60s=0
+19:52:10 up=39:29 cpu=13.5 mt=2350 layout=2 layout%=0 rss=255MB evals60s=0
+19:53:10 up=40:29 cpu=15.1 mt=2285 layout=6 layout%=0 rss=193MB evals60s=0
+19:54:10 up=41:29 cpu=11.2 mt=0 layout=6 layout%=0 rss=192MB evals60s=0
+19:55:10 up=42:29 cpu=12.6 mt=2324 layout=1 layout%=0 rss=192MB evals60s=0
+19:56:11 up=43:30 cpu=14.3 mt=2309 layout=3 layout%=0 rss=192MB evals60s=0
+19:57:11 up=44:30 cpu=14.0 mt=2320 layout=3 layout%=0 rss=192MB evals60s=0
+19:58:12 up=45:31 cpu=16.4 mt=2313 layout=4 layout%=0 rss=192MB evals60s=0
+19:59:12 up=46:31 cpu=13.4 mt=0 layout=3 layout%=0 rss=193MB evals60s=0
+20:00:12 up=47:31 cpu=11.7 mt=2278 layout=4 layout%=0 rss=192MB evals60s=0
+20:01:13 up=48:32 cpu=14.4 mt=2297 layout=9 layout%=0 rss=198MB evals60s=0
+20:02:13 up=49:32 cpu=16.8 mt=2284 layout=4 layout%=0 rss=198MB evals60s=0
+20:03:13 up=50:32 cpu=14.9 mt=0 layout=5 layout%=0 rss=198MB evals60s=0
+20:04:13 up=51:32 cpu=10.9 mt=2579 layout=4 layout%=0 rss=198MB evals60s=0
+20:05:14 up=52:33 cpu=13.3 mt=0 layout=6 layout%=0 rss=198MB evals60s=0
+20:06:14 up=53:33 cpu=14.1 mt=2537 layout=6 layout%=0 rss=198MB evals60s=0
+20:07:14 up=54:33 cpu=14.3 mt=2501 layout=5 layout%=0 rss=198MB evals60s=0
+20:08:15 up=55:34 cpu=15.9 mt=0 layout=2 layout%=0 rss=198MB evals60s=0
+20:09:15 up=56:34 cpu=14.7 mt=2511 layout=1 layout%=0 rss=198MB evals60s=0
+20:10:15 up=57:34 cpu=11.8 mt=2409 layout=3 layout%=0 rss=198MB evals60s=0
+20:11:16 up=58:35 cpu=13.2 mt=2283 layout=4 layout%=0 rss=198MB evals60s=0
+20:12:16 up=59:35 cpu=17.8 mt=0 layout=6 layout%=0 rss=198MB evals60s=0
+20:13:16 up=01:00:35 cpu=13.9 mt=2292 layout=5 layout%=0 rss=198MB evals60s=0
+20:14:17 up=01:01:36 cpu=13.6 mt=0 layout=4 layout%=0 rss=198MB evals60s=0
+20:15:17 up=01:02:36 cpu=16.1 mt=2514 layout=1 layout%=0 rss=198MB evals60s=0
+20:16:17 up=01:03:36 cpu=13.2 mt=2524 layout=3 layout%=0 rss=198MB evals60s=0
+20:17:17 up=01:04:36 cpu=14.2 mt=2517 layout=1 layout%=0 rss=198MB evals60s=0
+20:18:18 up=01:05:37 cpu=15.7 mt=2516 layout=2 layout%=0 rss=198MB evals60s=0
+20:19:18 up=01:06:37 cpu=18.7 mt=2504 layout=3 layout%=0 rss=198MB evals60s=0
+20:20:18 up=01:07:37 cpu=15.3 mt=2312 layout=7 layout%=0 rss=203MB evals60s=0
+20:21:19 up=01:08:38 cpu=14.7 mt=2289 layout=4 layout%=0 rss=198MB evals60s=0
+20:22:19 up=01:09:38 cpu=14.7 mt=2285 layout=1 layout%=0 rss=198MB evals60s=0
+20:23:19 up=01:10:38 cpu=14.4 mt=2304 layout=7 layout%=0 rss=204MB evals60s=0
+20:24:19 up=01:11:38 cpu=14.0 mt=2299 layout=3 layout%=0 rss=198MB evals60s=0
+20:25:20 up=01:12:39 cpu=15.3 mt=2285 layout=5 layout%=0 rss=198MB evals60s=0
+20:26:20 up=01:13:39 cpu=17.7 mt=2289 layout=1 layout%=0 rss=198MB evals60s=0
+20:27:20 up=01:14:39 cpu=14.2 mt=2508 layout=1 layout%=0 rss=198MB evals60s=0
+20:28:21 up=01:15:40 cpu=14.4 mt=2498 layout=3 layout%=0 rss=199MB evals60s=0
+20:29:21 up=01:16:40 cpu=15.3 mt=0 layout=4 layout%=0 rss=198MB evals60s=0
+20:30:21 up=01:17:40 cpu=13.5 mt=2496 layout=2 layout%=0 rss=199MB evals60s=0
+20:31:22 up=01:18:41 cpu=15.4 mt=2502 layout=3 layout%=0 rss=199MB evals60s=0
+20:32:22 up=01:19:41 cpu=15.1 mt=2493 layout=3 layout%=0 rss=199MB evals60s=0
+20:33:22 up=01:20:41 cpu=15.4 mt=2501 layout=3 layout%=0 rss=198MB evals60s=0
+20:34:22 up=01:21:41 cpu=16.7 mt=0 layout=5 layout%=0 rss=199MB evals60s=0
+20:35:23 up=01:22:42 cpu=16.6 mt=2489 layout=2 layout%=0 rss=199MB evals60s=0
+20:36:23 up=01:23:42 cpu=7.0 mt=2488 layout=15 layout%=0 rss=199MB evals60s=0
+20:37:23 up=01:24:42 cpu=7.2 mt=2538 layout=1 layout%=0 rss=256MB evals60s=0
+20:38:24 up=01:25:43 cpu=9.7 mt=0 layout=3 layout%=0 rss=262MB evals60s=0
+20:39:24 up=01:26:43 cpu=9.4 mt=2511 layout=2 layout%=0 rss=194MB evals60s=0
+20:40:24 up=01:27:43 cpu=9.2 mt=2464 layout=2 layout%=0 rss=257MB evals60s=0
+20:41:25 up=01:28:43 cpu=6.8 mt=2465 layout=4 layout%=0 rss=194MB evals60s=0
+20:42:25 up=01:29:44 cpu=10.2 mt=0 layout=3 layout%=0 rss=199MB evals60s=0
+20:43:25 up=01:30:44 cpu=7.8 mt=2456 layout=4 layout%=0 rss=205MB evals60s=0
+20:44:25 up=01:31:44 cpu=8.8 mt=2463 layout=2 layout%=0 rss=263MB evals60s=0
+20:45:26 up=01:32:45 cpu=10.5 mt=0 layout=4 layout%=0 rss=205MB evals60s=0
+20:46:26 up=01:33:45 cpu=12.7 mt=0 layout=4 layout%=0 rss=205MB evals60s=0
+20:47:26 up=01:34:45 cpu=10.5 mt=2278 layout=3 layout%=0 rss=200MB evals60s=0
+20:48:27 up=01:35:46 cpu=13.7 mt=2264 layout=1 layout%=0 rss=200MB evals60s=0
+20:49:27 up=01:36:46 cpu=10.1 mt=0 layout=7 layout%=0 rss=200MB evals60s=0
+20:50:27 up=01:37:46 cpu=11.8 mt=2224 layout=4 layout%=0 rss=200MB evals60s=0
+20:51:28 up=01:38:46 cpu=10.4 mt=2269 layout=4 layout%=0 rss=200MB evals60s=0
+20:52:28 up=01:39:47 cpu=12.1 mt=2283 layout=11 layout%=0 rss=258MB evals60s=0
+20:53:28 up=01:40:47 cpu=12.2 mt=0 layout=8 layout%=0 rss=200MB evals60s=0
+20:54:28 up=01:41:47 cpu=12.2 mt=0 layout=2 layout%=0 rss=200MB evals60s=0
+20:55:29 up=01:42:48 cpu=13.9 mt=2209 layout=5 layout%=0 rss=200MB evals60s=0
+20:56:29 up=01:43:48 cpu=11.0 mt=2284 layout=9 layout%=0 rss=200MB evals60s=0
+20:57:29 up=01:44:48 cpu=12.5 mt=2220 layout=5 layout%=0 rss=200MB evals60s=0
+20:58:30 up=01:45:49 cpu=11.1 mt=2218 layout=4 layout%=0 rss=200MB evals60s=0
+20:59:30 up=01:46:49 cpu=16.7 mt=2216 layout=2 layout%=0 rss=206MB evals60s=0
+21:00:30 up=01:47:49 cpu=13.6 mt=0 layout=5 layout%=0 rss=200MB evals60s=0
+21:01:30 up=01:48:49 cpu=12.3 mt=2223 layout=7 layout%=0 rss=200MB evals60s=0
+21:02:31 up=01:49:50 cpu=13.6 mt=0 layout=5 layout%=0 rss=200MB evals60s=0
+21:03:31 up=01:50:50 cpu=10.5 mt=2263 layout=9 layout%=0 rss=206MB evals60s=0
+21:04:31 up=01:51:50 cpu=12.2 mt=2205 layout=6 layout%=0 rss=200MB evals60s=0
+21:05:32 up=01:52:51 cpu=13.9 mt=2211 layout=5 layout%=0 rss=200MB evals60s=0
+21:06:32 up=01:53:51 cpu=13.0 mt=2222 layout=6 layout%=0 rss=200MB evals60s=0
+21:07:32 up=01:54:51 cpu=14.2 mt=2212 layout=8 layout%=0 rss=200MB evals60s=0
+21:08:33 up=01:55:52 cpu=11.6 mt=0 layout=4 layout%=0 rss=258MB evals60s=0
+21:09:33 up=01:56:52 cpu=12.9 mt=2217 layout=3 layout%=0 rss=195MB evals60s=0
+21:10:33 up=01:57:52 cpu=11.0 mt=2436 layout=3 layout%=0 rss=195MB evals60s=0
+21:11:34 up=01:58:52 cpu=15.5 mt=2459 layout=5 layout%=0 rss=195MB evals60s=0
+21:12:34 up=01:59:53 cpu=13.2 mt=2455 layout=1 layout%=0 rss=201MB evals60s=0
+21:13:34 up=02:00:53 cpu=14.2 mt=0 layout=7 layout%=0 rss=201MB evals60s=0
+21:14:34 up=02:01:53 cpu=11.8 mt=0 layout=5 layout%=0 rss=201MB evals60s=0
+21:15:35 up=02:02:54 cpu=14.9 mt=2215 layout=2 layout%=0 rss=201MB evals60s=0
+21:16:35 up=02:03:54 cpu=15.9 mt=2214 layout=3 layout%=0 rss=201MB evals60s=0
+21:17:35 up=02:04:54 cpu=12.1 mt=2221 layout=2 layout%=0 rss=201MB evals60s=0
+21:18:36 up=02:05:55 cpu=14.0 mt=2195 layout=1 layout%=0 rss=201MB evals60s=0
+21:19:36 up=02:06:55 cpu=12.6 mt=2218 layout=5 layout%=0 rss=201MB evals60s=0
+21:20:36 up=02:07:55 cpu=16.7 mt=2234 layout=5 layout%=0 rss=201MB evals60s=0
+21:21:36 up=02:08:55 cpu=12.6 mt=2221 layout=2 layout%=0 rss=201MB evals60s=0
+21:22:37 up=02:09:56 cpu=12.6 mt=2232 layout=10 layout%=0 rss=206MB evals60s=0
+21:23:37 up=02:10:56 cpu=14.6 mt=2238 layout=9 layout%=0 rss=206MB evals60s=0
+21:24:37 up=02:11:56 cpu=8.2 mt=2505 layout=2 layout%=0 rss=201MB evals60s=0
+21:25:38 up=02:12:57 cpu=7.2 mt=2505 layout=4 layout%=0 rss=201MB evals60s=0
+21:26:38 up=00:56 cpu=7.3 mt=2392 layout=2 layout%=0 rss=131MB evals60s=0
+21:27:38 up=01:56 cpu=8.5 mt=2439 layout=1 layout%=0 rss=132MB evals60s=0
+21:28:39 up=02:56 cpu=10.8 mt=2450 layout=0 layout%=0 rss=132MB evals60s=0
+21:29:39 up=03:57 cpu=6.6 mt=2520 layout=0 layout%=0 rss=132MB evals60s=0
+21:30:39 up=04:57 cpu=5.9 mt=2475 layout=1 layout%=0 rss=132MB evals60s=0
+21:31:40 up=05:58 cpu=6.3 mt=2447 layout=0 layout%=0 rss=133MB evals60s=0
+21:32:40 up=06:58 cpu=7.3 mt=2434 layout=0 layout%=0 rss=133MB evals60s=0
+21:33:40 up=07:58 cpu=8.2 mt=2485 layout=1 layout%=0 rss=133MB evals60s=0
+21:34:41 up=08:59 cpu=5.7 mt=2521 layout=1 layout%=0 rss=133MB evals60s=0
+21:35:41 up=09:59 cpu=5.4 mt=2523 layout=0 layout%=0 rss=133MB evals60s=0
+21:36:41 up=10:59 cpu=7.0 mt=2448 layout=1 layout%=0 rss=133MB evals60s=0
+21:37:41 up=11:59 cpu=5.2 mt=2516 layout=0 layout%=0 rss=136MB evals60s=0
+21:38:42 up=13:00 cpu=5.7 mt=2523 layout=0 layout%=0 rss=136MB evals60s=0
+21:39:42 up=14:00 cpu=7.2 mt=2530 layout=2 layout%=0 rss=136MB evals60s=0
+21:40:42 up=15:00 cpu=5.5 mt=2524 layout=1 layout%=0 rss=136MB evals60s=0
+21:41:43 up=16:01 cpu=5.4 mt=2515 layout=0 layout%=0 rss=136MB evals60s=0
+21:42:43 up=17:01 cpu=5.4 mt=2520 layout=1 layout%=0 rss=136MB evals60s=0
+21:43:43 up=18:01 cpu=6.2 mt=2521 layout=1 layout%=0 rss=136MB evals60s=0
+21:44:43 up=19:01 cpu=5.2 mt=2522 layout=0 layout%=0 rss=136MB evals60s=0
+21:45:44 up=20:02 cpu=6.4 mt=2521 layout=0 layout%=0 rss=136MB evals60s=0
+21:46:44 up=21:02 cpu=5.4 mt=2521 layout=1 layout%=0 rss=136MB evals60s=0
+21:47:44 up=22:02 cpu=5.6 mt=2521 layout=0 layout%=0 rss=136MB evals60s=0
+21:48:45 up=23:03 cpu=7.2 mt=2517 layout=0 layout%=0 rss=136MB evals60s=0
+21:49:45 up=24:03 cpu=7.3 mt=2521 layout=0 layout%=0 rss=136MB evals60s=0
+21:50:45 up=25:03 cpu=5.6 mt=2520 layout=0 layout%=0 rss=136MB evals60s=0
+21:51:45 up=26:03 cpu=6.6 mt=2508 layout=0 layout%=0 rss=136MB evals60s=0
+21:52:46 up=27:04 cpu=5.7 mt=2518 layout=1 layout%=0 rss=136MB evals60s=0
+21:53:46 up=28:04 cpu=7.4 mt=2527 layout=2 layout%=0 rss=136MB evals60s=0
+21:54:46 up=29:04 cpu=6.3 mt=2530 layout=1 layout%=0 rss=136MB evals60s=0
+21:55:47 up=30:05 cpu=5.6 mt=2502 layout=0 layout%=0 rss=136MB evals60s=0
+21:56:47 up=31:05 cpu=5.9 mt=2512 layout=0 layout%=0 rss=136MB evals60s=0
+21:57:47 up=32:05 cpu=7.3 mt=2518 layout=4 layout%=0 rss=136MB evals60s=0
+21:58:48 up=33:06 cpu=6.4 mt=2520 layout=1 layout%=0 rss=136MB evals60s=0
+21:59:48 up=34:06 cpu=4.8 mt=2520 layout=0 layout%=0 rss=136MB evals60s=0
+22:00:48 up=35:06 cpu=6.0 mt=2522 layout=1 layout%=0 rss=136MB evals60s=0
+22:01:49 up=36:07 cpu=8.0 mt=2508 layout=0 layout%=0 rss=137MB evals60s=0
+22:02:49 up=37:07 cpu=5.5 mt=2519 layout=1 layout%=0 rss=137MB evals60s=0
+22:03:49 up=38:07 cpu=4.5 mt=2523 layout=1 layout%=0 rss=136MB evals60s=0
+22:04:49 up=39:07 cpu=5.6 mt=2518 layout=0 layout%=0 rss=136MB evals60s=0
+22:05:50 up=40:08 cpu=6.6 mt=2511 layout=1 layout%=0 rss=137MB evals60s=0
+22:06:50 up=41:08 cpu=4.5 mt=2515 layout=3 layout%=0 rss=137MB evals60s=0
+22:07:50 up=42:08 cpu=4.8 mt=2290 layout=0 layout%=0 rss=137MB evals60s=0
+22:08:51 up=43:09 cpu=5.4 mt=2286 layout=0 layout%=0 rss=137MB evals60s=0
+22:09:51 up=44:09 cpu=5.1 mt=2285 layout=0 layout%=0 rss=137MB evals60s=0
+22:10:51 up=45:09 cpu=5.2 mt=2283 layout=0 layout%=0 rss=137MB evals60s=0
+22:11:51 up=46:09 cpu=5.2 mt=2287 layout=0 layout%=0 rss=137MB evals60s=0
+22:12:52 up=47:10 cpu=5.8 mt=2286 layout=0 layout%=0 rss=137MB evals60s=0
+22:13:52 up=48:10 cpu=5.8 mt=2281 layout=0 layout%=0 rss=137MB evals60s=0
+22:14:52 up=49:10 cpu=7.0 mt=2289 layout=0 layout%=0 rss=137MB evals60s=0
+22:15:53 up=50:11 cpu=5.6 mt=2278 layout=0 layout%=0 rss=137MB evals60s=0
+22:16:53 up=51:11 cpu=6.0 mt=2284 layout=0 layout%=0 rss=137MB evals60s=0
+22:17:53 up=52:11 cpu=3.2 mt=2288 layout=0 layout%=0 rss=137MB evals60s=0
+22:18:53 up=53:11 cpu=5.4 mt=2288 layout=0 layout%=0 rss=137MB evals60s=0
+22:19:54 up=54:12 cpu=6.2 mt=2283 layout=0 layout%=0 rss=137MB evals60s=0
+22:20:54 up=55:12 cpu=5.1 mt=2290 layout=1 layout%=0 rss=137MB evals60s=0
+22:21:54 up=56:12 cpu=4.5 mt=2286 layout=0 layout%=0 rss=137MB evals60s=0
+22:22:55 up=57:13 cpu=5.6 mt=2517 layout=2 layout%=0 rss=137MB evals60s=0
+22:23:55 up=58:13 cpu=5.7 mt=2509 layout=0 layout%=0 rss=137MB evals60s=0
+22:24:55 up=59:13 cpu=6.1 mt=2515 layout=0 layout%=0 rss=137MB evals60s=0
+22:25:55 up=01:00:13 cpu=5.0 mt=2523 layout=2 layout%=0 rss=137MB evals60s=0
+22:26:56 up=01:01:14 cpu=1.1 mt=2581 layout=6 layout%=0 rss=138MB evals60s=0
+22:27:56 up=01:02:14 cpu=0.6 mt=2339 layout=6 layout%=0 rss=138MB evals60s=0
+22:28:56 up=01:03:14 cpu=0.2 mt=2329 layout=5 layout%=0 rss=138MB evals60s=0
+22:29:57 up=01:04:15 cpu=0.2 mt=2342 layout=6 layout%=0 rss=138MB evals60s=0
+22:30:57 up=01:05:15 cpu=1.2 mt=2331 layout=5 layout%=0 rss=138MB evals60s=0
+22:31:57 up=01:06:15 cpu=0.3 mt=2331 layout=8 layout%=0 rss=138MB evals60s=0
+22:32:57 up=01:07:15 cpu=0.3 mt=2329 layout=8 layout%=0 rss=138MB evals60s=0
+22:33:58 up=01:08:16 cpu=0.9 mt=2332 layout=5 layout%=0 rss=138MB evals60s=0
+22:34:58 up=01:09:16 cpu=0.2 mt=2330 layout=7 layout%=0 rss=138MB evals60s=0
+22:35:58 up=01:10:16 cpu=0.2 mt=2333 layout=8 layout%=0 rss=138MB evals60s=0
+22:36:59 up=01:11:17 cpu=2.0 mt=2330 layout=6 layout%=0 rss=138MB evals60s=0
+22:37:59 up=01:12:17 cpu=0.8 mt=2329 layout=6 layout%=0 rss=138MB evals60s=0
+22:38:59 up=01:13:17 cpu=3.4 mt=2525 layout=4 layout%=0 rss=197MB evals60s=0
+22:40:00 up=01:14:18 cpu=6.8 mt=2520 layout=1 layout%=0 rss=284MB evals60s=0
+22:41:00 up=01:15:18 cpu=5.1 mt=2490 layout=0 layout%=0 rss=223MB evals60s=0
+22:42:00 up=01:16:18 cpu=3.9 mt=2519 layout=1 layout%=0 rss=281MB evals60s=0
+22:43:01 up=01:17:18 cpu=4.4 mt=2520 layout=0 layout%=0 rss=223MB evals60s=0
+22:44:01 up=01:18:19 cpu=4.4 mt=2524 layout=0 layout%=0 rss=224MB evals60s=0
+22:45:01 up=01:19:19 cpu=4.4 mt=2519 layout=0 layout%=0 rss=224MB evals60s=0
+22:46:01 up=01:20:19 cpu=5.3 mt=2531 layout=5 layout%=0 rss=224MB evals60s=0
+22:47:02 up=01:21:20 cpu=5.0 mt=2520 layout=1 layout%=0 rss=224MB evals60s=0
+22:48:02 up=01:22:20 cpu=4.4 mt=2518 layout=0 layout%=0 rss=224MB evals60s=0
+22:49:02 up=01:23:20 cpu=4.2 mt=2509 layout=2 layout%=0 rss=224MB evals60s=0
+22:50:03 up=01:24:21 cpu=4.1 mt=2510 layout=0 layout%=0 rss=224MB evals60s=0
+22:51:03 up=01:25:21 cpu=4.2 mt=2508 layout=1 layout%=0 rss=224MB evals60s=0
+22:52:03 up=01:26:21 cpu=4.2 mt=2278 layout=1 layout%=0 rss=224MB evals60s=0
+22:53:03 up=01:27:21 cpu=4.0 mt=2277 layout=0 layout%=0 rss=224MB evals60s=0
+22:54:04 up=01:28:22 cpu=6.1 mt=2433 layout=0 layout%=0 rss=224MB evals60s=0
+22:55:04 up=01:29:22 cpu=6.3 mt=2424 layout=1 layout%=0 rss=224MB evals60s=0
+22:56:04 up=01:30:22 cpu=4.5 mt=2426 layout=1 layout%=0 rss=224MB evals60s=0
+22:57:05 up=01:31:23 cpu=5.1 mt=2430 layout=0 layout%=0 rss=224MB evals60s=0
+22:58:05 up=01:32:23 cpu=7.2 mt=2443 layout=1 layout%=0 rss=224MB evals60s=0
+22:59:05 up=01:33:23 cpu=4.2 mt=2462 layout=1 layout%=0 rss=224MB evals60s=0
+23:00:06 up=01:34:24 cpu=2.4 mt=2609 layout=0 layout%=0 rss=221MB evals60s=0
+23:01:06 up=00:31 cpu=7.3 mt=2494 layout=0 layout%=0 rss=193MB evals60s=0
+23:02:06 up=01:31 cpu=8.8 mt=2490 layout=8 layout%=0 rss=137MB evals60s=0
+23:03:06 up=02:31 cpu=6.4 mt=2524 layout=0 layout%=0 rss=238MB evals60s=0
+23:04:07 up=03:32 cpu=7.0 mt=2530 layout=0 layout%=0 rss=181MB evals60s=0
