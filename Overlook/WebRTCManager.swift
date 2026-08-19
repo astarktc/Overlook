@@ -234,6 +234,41 @@ class WebRTCManager: NSObject, ObservableObject {
         videoView = VideoRenderView(control: renderControl, sink: self)
     }
 
+    // MARK: - Testing seams (first-frame delivery revalidation)
+    //
+    // The receipt-side revalidation in `videoRenderDidReceiveFirstFrame` cannot be exercised
+    // through the public surface without a live signaling server, so these expose exactly what
+    // the end-to-end test needs: arming the render path the way a real connection does, the
+    // fallback's epoch transition as `applyAndActOnCodecSelectionState` performs it, and the
+    // two effects a stale delivery must NOT have (reconnect-budget reset, watchdog event).
+    // See `OverlookTests/VideoRenderViewTests.swift`.
+
+    /// Counts first-frame deliveries that survived receipt revalidation and reached the
+    /// first-frame watchdog. Never read in production.
+    private(set) var firstFrameWatchdogDeliveriesForTesting = 0
+
+    var iceAutomaticReconnectAttemptsForTesting: Int {
+        get { iceAutomaticReconnectAttempts }
+        set { iceAutomaticReconnectAttempts = newValue }
+    }
+
+    /// Arms a fresh connection generation and rendering epoch exactly the way a real connection
+    /// does, returning the view whose decode path delivers signals to this manager.
+    func armRenderPathForTesting() -> VideoRenderView {
+        makeVideoRenderViewIfNeeded()
+        bumpConnectionGeneration()
+        guard let videoView else { preconditionFailure("makeVideoRenderViewIfNeeded made no view") }
+        videoView.beginRendering(generation: connectionGeneration)
+        return videoView
+    }
+
+    /// The codec fallback's epoch transition, exactly as `applyAndActOnCodecSelectionState`
+    /// performs it: revoke + flush + epoch advance, then a fresh health window.
+    func runFallbackEpochTransitionForTesting() {
+        videoView?.flushDisplayAbandoningH265Stream()
+        setLastVideoFrameTime(nil)
+    }
+
     // MARK: - Equality-gated stream-health publishing
     //
     // The health tick recomputes these every second, and re-publishing an unchanged value
@@ -1901,6 +1936,7 @@ extension WebRTCManager: VideoRenderSignalSink {
         Task { @MainActor [weak self] in
             guard let self, self.connectionGeneration == generation,
                   self.renderControl.isCurrentEpoch(token) else { return }
+            self.firstFrameWatchdogDeliveriesForTesting += 1
             _ = await self.handleFirstFrameWatchdogEvent(
                 .firstDecodedFrameArrived,
                 generation: generation

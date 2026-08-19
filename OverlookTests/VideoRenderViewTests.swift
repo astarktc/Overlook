@@ -688,6 +688,62 @@ final class VideoStreamEpochTests: XCTestCase {
             "The delivery carries the admitted token, so the receiver's revalidation accepts it"
         )
     }
+
+    // MARK: - Receipt-side revalidation, end to end through the real manager
+
+    /// The delivery gap the view-level tests above cannot cover: a first-frame delivery that
+    /// was queued BEFORE the fallback (admitted, so it carries the then-current token) but
+    /// reaches the main actor only AFTER the epoch advanced. `WebRTCManager` must refuse it at
+    /// receipt — no reconnect-budget reset, no first-frame watchdog event — while the
+    /// replacement stream's first frame is honored. Removing the `isCurrentEpoch`
+    /// revalidation in `WebRTCManager.videoRenderDidReceiveFirstFrame` fails this test.
+    @MainActor
+    func testAStaleFirstFrameDeliveryIsRefusedAtReceiptByTheManager() async throws {
+        let manager = WebRTCManager()
+        let view = manager.armRenderPathForTesting()
+        manager.iceAutomaticReconnectAttemptsForTesting = 2
+
+        // A pre-fallback frame is admitted and queues its first-frame delivery toward the
+        // main actor…
+        let frame = RTCVideoFrame(buffer: try makeFrameBuffer(), rotation: ._0, timeStampNs: 0)
+        view.renderFrame(frame)
+
+        // …but before that delivery gets a main-actor turn (this test runs ON the main actor,
+        // so the queued hop cannot have run yet), the fallback advances the epoch.
+        manager.runFallbackEpochTransitionForTesting()
+
+        // Let the stale delivery drain. Waiting longer can only slow the test, never break it.
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(
+            manager.iceAutomaticReconnectAttemptsForTesting,
+            2,
+            "A stale first-frame delivery must not reset the reconnect budget"
+        )
+        XCTAssertEqual(
+            manager.firstFrameWatchdogDeliveriesForTesting,
+            0,
+            "… and must not reach the first-frame watchdog"
+        )
+
+        // The replacement stream's first frame IS honored at receipt: it carries the
+        // post-fallback token and finds the cleared health clock.
+        view.renderFrame(frame)
+        for _ in 0..<200 where manager.firstFrameWatchdogDeliveriesForTesting < 1 {
+            try await Task.sleep(nanoseconds: 5_000_000)
+        }
+
+        XCTAssertEqual(
+            manager.iceAutomaticReconnectAttemptsForTesting,
+            0,
+            "The replacement stream's first frame resets the reconnect budget"
+        )
+        XCTAssertEqual(
+            manager.firstFrameWatchdogDeliveriesForTesting,
+            1,
+            "… and reaches the first-frame watchdog exactly once"
+        )
+    }
 }
 
 // MARK: - Display engine
