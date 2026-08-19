@@ -72,6 +72,9 @@
 		01000048 /* EDIDCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000048 /* EDIDCatalog.swift */; };
 		01000049 /* WebUISettingsActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000049 /* WebUISettingsActions.swift */; };
 		0100004A /* WebUISettingsSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200004A /* WebUISettingsSections.swift */; };
+		0100004B /* VideoRenderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200004B /* VideoRenderView.swift */; };
+		0100004C /* VideoRenderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200004B /* VideoRenderView.swift */; };
+		0100004D /* VideoRenderViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200004C /* VideoRenderViewTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -129,6 +132,8 @@
 		02000048 /* EDIDCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EDIDCatalog.swift; sourceTree = "<group>"; };
 		02000049 /* WebUISettingsActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebUISettingsActions.swift; sourceTree = "<group>"; };
 		0200004A /* WebUISettingsSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebUISettingsSections.swift; sourceTree = "<group>"; };
+		0200004B /* VideoRenderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoRenderView.swift; sourceTree = "<group>"; };
+		0200004C /* VideoRenderViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoRenderViewTests.swift; sourceTree = "<group>"; };
 		03000001 /* Overlook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Overlook.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		03000002 /* OverlookTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OverlookTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -177,6 +182,7 @@
 				02000002 /* ContentView.swift */,
 				02000019 /* ContentControlBar.swift */,
 				0200001A /* VideoSurfaceView.swift */,
+				0200004B /* VideoRenderView.swift */,
 				0200001B /* StatusBarView.swift */,
 				0200003A /* StreamTelemetryViews.swift */,
 				0200003B /* WebUISettingsPanelModel.swift */,
@@ -229,6 +235,7 @@
 			children = (
 				02000022 /* OverlookTests.swift */,
 				02000027 /* CodecSelectionPolicyTests.swift */,
+				0200004C /* VideoRenderViewTests.swift */,
 				02000034 /* SDPOfferParserTests.swift */,
 				02000036 /* WebRTCBinaryH265SupportTests.swift */,
 				02000037 /* H265LiveWireDiagnosticTests.swift */,
@@ -376,6 +383,7 @@
 				01000002 /* ContentView.swift in Sources */,
 				0100001A /* ContentControlBar.swift in Sources */,
 				0100001B /* VideoSurfaceView.swift in Sources */,
+				0100004B /* VideoRenderView.swift in Sources */,
 				0100001C /* StatusBarView.swift in Sources */,
 				01000046 /* StreamTelemetryViews.swift in Sources */,
 				01000047 /* WebUISettingsPanelModel.swift in Sources */,
@@ -417,6 +425,8 @@
 				01000039 /* WebRTCBinaryH265SupportTests.swift in Sources */,
 				0100003A /* H265LiveWireDiagnosticTests.swift in Sources */,
 				0100003B /* WebRTCManager.swift in Sources */,
+				0100004C /* VideoRenderView.swift in Sources */,
+				0100004D /* VideoRenderViewTests.swift in Sources */,
 				01000045 /* StreamTelemetry.swift in Sources */,
 				01000043 /* DiagFlags.swift in Sources */,
 				0100003C /* KVMDeviceManager.swift in Sources */,

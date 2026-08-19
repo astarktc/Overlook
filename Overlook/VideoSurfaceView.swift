@@ -257,7 +257,7 @@ struct VideoSurfaceView: View {
 
 #if canImport(WebRTC)
 struct VideoViewRepresentable: NSViewRepresentable {
-    let videoView: RTCMTLNSVideoView
+    let videoView: VideoRenderView
     let onMouseMove: (CGPoint, CGSize) -> Void
     let onMouseButton: (MouseButton, Bool, CGPoint) -> Void
     let onScrollWheel: (CGFloat, CGFloat) -> Void
@@ -286,7 +286,7 @@ final class TrackingContainerView: NSView {
 
     private var trackingAreaRef: NSTrackingArea?
 
-    private weak var embeddedVideoView: RTCMTLNSVideoView?
+    private weak var embeddedVideoView: VideoRenderView?
     private var embeddedConstraints: [NSLayoutConstraint] = []
 
     override init(frame frameRect: NSRect) {
@@ -325,7 +325,10 @@ final class TrackingContainerView: NSView {
         trackingAreaRef = area
     }
 
-    func embedVideoViewIfNeeded(_ videoView: RTCMTLNSVideoView) {
+    /// Pins the video view to the container's edges. The pinning lives here (not in the video
+    /// view) so the video view stays a plain layer-backed surface; the constraints are
+    /// deactivated and rebuilt only when the embedded view actually changes.
+    func embedVideoViewIfNeeded(_ videoView: VideoRenderView) {
         guard embeddedVideoView !== videoView else { return }
 
         if !embeddedConstraints.isEmpty {

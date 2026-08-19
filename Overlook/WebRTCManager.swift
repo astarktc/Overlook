@@ -43,28 +43,6 @@ struct InputEvent: Codable {
 }
 
 #if canImport(WebRTC)
-private final class ConnectionGenerationVideoRenderer: NSObject, RTCVideoRenderer {
-    private weak var manager: WebRTCManager?
-    private let generation: Int
-
-    init(manager: WebRTCManager, generation: Int) {
-        self.manager = manager
-        self.generation = generation
-    }
-
-    func renderFrame(_ frame: RTCVideoFrame?) {
-        Task { @MainActor [weak manager] in
-            manager?.renderFrame(frame, generation: generation)
-        }
-    }
-
-    func setSize(_ size: CGSize) {
-        Task { @MainActor [weak manager] in
-            manager?.setVideoSize(size, generation: generation)
-        }
-    }
-}
-
 @MainActor
 class WebRTCManager: NSObject, ObservableObject {
     private final class SessionDelegate: NSObject, URLSessionDelegate {
@@ -90,7 +68,7 @@ class WebRTCManager: NSObject, ObservableObject {
         }
     }
 
-    @Published var videoView: RTCMTLNSVideoView?
+    @Published var videoView: VideoRenderView?
     @Published var isConnected = false
     @Published var currentFrame: CVPixelBuffer?
     /// Guest resolution. Not telemetry: input mapping, the window aspect ratio and
@@ -114,8 +92,12 @@ class WebRTCManager: NSObject, ObservableObject {
     private var peerConnection: RTCPeerConnection?
     private var audioPeerConnection: RTCPeerConnection?
     private var videoTrack: RTCVideoTrack?
-    private var videoRenderer: ConnectionGenerationVideoRenderer?
     private var connectionGeneration = 0
+    /// The connection state the (off-main) render path reads for every decoded frame: the current
+    /// generation, the OCR capture gate, the watchdog-suppression flag, and the stream-health
+    /// frame clock. Written here on the main actor, read on the decode thread under one unfair
+    /// lock — which is what let the per-frame main-actor hop go away.
+    private let renderControl = VideoRenderControl()
     private var localAudioTrack: RTCAudioTrack?
     private var localAudioSender: RTCRtpSender?
     private var dataChannel: RTCDataChannel?
@@ -165,12 +147,6 @@ class WebRTCManager: NSObject, ObservableObject {
     private let audioInputDeviceUIDDefaultsKey = "overlook.audio.inputDeviceUID"
     private let audioOutputDeviceUIDDefaultsKey = "overlook.audio.outputDeviceUID"
 
-    private var fpsWindowStartTime: CFTimeInterval = 0
-    private var fpsFrameCount: Int = 0
-    private var lastFpsPublishTime: CFTimeInterval = 0
-
-    private let streamHealthQueue = DispatchQueue(label: "com.overlook.stream-health")
-    private var lastVideoFrameTime: CFTimeInterval?
     private var connectedIceTime: CFTimeInterval?
     private var streamHealthTimer: Timer?
 
@@ -199,7 +175,6 @@ class WebRTCManager: NSObject, ObservableObject {
     private var janusWaiters: [String: CheckedContinuation<[String: Any], Error>] = [:]
 
     private var isFrameCaptureEnabled: Bool = false
-    private var lastFrameCaptureTime: CFTimeInterval = 0
     
     override init() {
         super.init()
@@ -231,24 +206,26 @@ class WebRTCManager: NSObject, ObservableObject {
         iceAutomaticReconnectTask = nil
     }
 
+    /// The stream-health frame clock lives in `renderControl`: the decode thread stamps it as
+    /// part of admitting a frame, and the 1 Hz health tick reads it from here.
     private func setLastVideoFrameTime(_ time: CFTimeInterval?) {
-        streamHealthQueue.sync {
-            lastVideoFrameTime = time
-        }
-    }
-
-    private func recordVideoFrame(at time: CFTimeInterval) -> Bool {
-        streamHealthQueue.sync {
-            let isFirstDecodedFrame = lastVideoFrameTime == nil
-            lastVideoFrameTime = time
-            return isFirstDecodedFrame
-        }
+        renderControl.setLastFrameTime(time)
     }
 
     private func getLastVideoFrameTime() -> CFTimeInterval? {
-        streamHealthQueue.sync {
-            lastVideoFrameTime
-        }
+        renderControl.lastFrameTime
+    }
+
+    /// Every generation bump must reach the render path, or frames from the connection just torn
+    /// down would keep painting and counting.
+    private func bumpConnectionGeneration() {
+        connectionGeneration &+= 1
+        renderControl.setGeneration(connectionGeneration)
+    }
+
+    private func makeVideoRenderViewIfNeeded() {
+        guard videoView == nil else { return }
+        videoView = VideoRenderView(control: renderControl, sink: self)
     }
 
     // MARK: - Equality-gated stream-health publishing
@@ -296,9 +273,7 @@ class WebRTCManager: NSObject, ObservableObject {
 
         factory = WebRTCFactoryBuilder.makeFactory(with: audioDevice)
 
-        if videoView == nil {
-            videoView = RTCMTLNSVideoView(frame: .zero)
-        }
+        makeVideoRenderViewIfNeeded()
     }
 
     private func startAudioDeviceChangeMonitoring() {
@@ -522,7 +497,7 @@ class WebRTCManager: NSObject, ObservableObject {
         connectionKind: ConnectionKind
     ) async throws -> Bool {
         tearDownConnection()
-        connectionGeneration &+= 1
+        bumpConnectionGeneration()
         let generation = connectionGeneration
 
         let initialCodecSelectionState = CodecSelectionPolicy.connect(
@@ -548,10 +523,8 @@ class WebRTCManager: NSObject, ObservableObject {
         hasEverConnectedToStream = false
 
         do {
-            if videoView == nil {
-                videoView = RTCMTLNSVideoView(frame: .zero)
-            }
-            
+            makeVideoRenderViewIfNeeded()
+
             // Create peer connection
             let configuration = RTCConfiguration()
             configuration.iceServers = [
@@ -645,6 +618,7 @@ class WebRTCManager: NSObject, ObservableObject {
 
     func setFrameCaptureEnabled(_ enabled: Bool) {
         isFrameCaptureEnabled = enabled
+        renderControl.setFrameCaptureEnabled(enabled)
 
         if enabled == false {
             currentFrame = nil
@@ -657,6 +631,7 @@ class WebRTCManager: NSObject, ObservableObject {
         negotiatedCodec = state.negotiatedCodec
         suppressFrameArrivalSignalsForWatchdogTesting =
             forceDecodeStarvationForWatchdogTesting && state.isFirstFrameWatchdogArmed
+        renderControl.setSuppressFrameArrivalSignals(suppressFrameArrivalSignalsForWatchdogTesting)
     }
 
     /// Publishes a policy transition and executes its one-shot command, if any.
@@ -676,6 +651,9 @@ class WebRTCManager: NSObject, ObservableObject {
             setLastVideoFrameAgeSeconds(nil)
             connectedIceTime = CACurrentMediaTime()
             setStreamStalled(false)
+            // The replacement stream is a different codec (and possibly a different resolution);
+            // anything still queued for display belongs to the stream being abandoned.
+            videoView?.flushDisplay()
 
             do {
                 try await sendVideoWatchRequest(videoFormat: videoFormat)
@@ -1607,7 +1585,7 @@ class WebRTCManager: NSObject, ObservableObject {
     }
 
     private func tearDownConnection() {
-        connectionGeneration &+= 1
+        bumpConnectionGeneration()
 
         connectionTimer?.invalidate()
         connectionTimer = nil
@@ -1632,13 +1610,10 @@ class WebRTCManager: NSObject, ObservableObject {
         dataChannel?.close()
         dataChannel = nil
 
-        if let videoTrack, let videoRenderer {
-            videoTrack.remove(videoRenderer)
-        }
         if let videoTrack, let videoView {
             videoTrack.remove(videoView)
         }
-        videoRenderer = nil
+        videoView?.endRendering()
         videoTrack = nil
         
         peerConnection?.close()
@@ -1663,14 +1638,13 @@ class WebRTCManager: NSObject, ObservableObject {
         negotiatedCodec = nil
         codecSelectionState = nil
         suppressFrameArrivalSignalsForWatchdogTesting = false
+        renderControl.setSuppressFrameArrivalSignals(false)
         isFrameCaptureEnabled = false
+        renderControl.setFrameCaptureEnabled(false)
         telemetry.reset()
         lastInboundVideoBytesReceived = nil
         lastInboundVideoBytesTimestamp = nil
         resetInboundAudioRateState()
-        fpsWindowStartTime = 0
-        fpsFrameCount = 0
-        lastFpsPublishTime = 0
     }
 
     private func ensureMicrophoneAccess() async -> Bool {
@@ -1828,20 +1802,13 @@ extension WebRTCManager: @preconcurrency RTCPeerConnectionDelegate {
             applyPlayoutDelayHintIfPossible()
             guard let track = rtpReceiver.track as? RTCVideoTrack else { return }
 
-            let renderer = ConnectionGenerationVideoRenderer(
-                manager: self,
-                generation: connectionGeneration
-            )
             videoTrack = track
-            videoRenderer = renderer
-            if let videoView {
-                track.add(videoView)
-            }
-            // [DEBUG-swiftui-audit] OVERLOOK_DIAG_NO_RENDER_HOP=1 keeps the direct videoView
-            // render path but drops the extra per-frame hop through WebRTCManager.
-            if DiagFlags.noRenderHop == false {
-                track.add(renderer)
-            }
+            makeVideoRenderViewIfNeeded()
+            guard let videoView else { return }
+            // The view *is* the renderer: one attach, and the generation it will accept frames
+            // for is armed before the track can deliver any.
+            videoView.beginRendering(generation: connectionGeneration)
+            track.add(videoView)
         }
     }
 }
@@ -1882,63 +1849,46 @@ extension WebRTCManager: @preconcurrency RTCDataChannelDelegate {
     }
  }
 
-// MARK: - RTCVideoRenderer
-extension WebRTCManager {
-    fileprivate func renderFrame(_ frame: RTCVideoFrame?, generation: Int) {
+// MARK: - VideoRenderSignalSink
+//
+// The render path itself runs entirely off the main actor (see `VideoRenderView`). These are the
+// only points where it reaches the main actor: once per connection for the first-frame watchdog
+// event, at most twice a second for fps, at most ~12 times a second while OCR capture is on, and
+// whenever the track's frame size changes.
+extension WebRTCManager: VideoRenderSignalSink {
+    func videoRenderDidReceiveFirstFrame(generation: Int) {
         guard connectionGeneration == generation else { return }
-        guard let frame else { return }
-        guard suppressFrameArrivalSignalsForWatchdogTesting == false else { return }
 
-        let now = CACurrentMediaTime()
-        let isFirstDecodedFrame = recordVideoFrame(at: now)
-        if isFirstDecodedFrame {
-            iceAutomaticReconnectAttempts = 0
-            Task { @MainActor [weak self] in
-                guard let self, self.connectionGeneration == generation else { return }
-                _ = await self.handleFirstFrameWatchdogEvent(
-                    .firstDecodedFrameArrived,
-                    generation: generation
-                )
-            }
-        }
-
-        if fpsWindowStartTime == 0 {
-            fpsWindowStartTime = now
-            lastFpsPublishTime = now
-        }
-
-        fpsFrameCount += 1
-
-        if now - lastFpsPublishTime >= 0.5 {
-            let dt = now - fpsWindowStartTime
-            if dt > 0 {
-                // Quantized to whole frames the way the UI renders it, so the 2 Hz window
-                // only publishes when the displayed number actually moves.
-                let fps = Int((Double(fpsFrameCount) / dt).rounded())
-                // [DEBUG-swiftui-audit] OVERLOOK_DIAG_NO_FPS=1 skips the fps telemetry write.
-                if DiagFlags.noFps == false {
-                    telemetry.update { $0.videoFps = fps }
-                }
-            }
-            fpsWindowStartTime = now
-            fpsFrameCount = 0
-            lastFpsPublishTime = now
-        }
-
-        guard isFrameCaptureEnabled else { return }
-
-        let minInterval: CFTimeInterval = 1.0 / 12.0
-        if now - lastFrameCaptureTime < minInterval {
-            return
-        }
-        lastFrameCaptureTime = now
-
-        if let cvBuffer = frame.buffer as? RTCCVPixelBuffer {
-            currentFrame = cvBuffer.pixelBuffer
+        iceAutomaticReconnectAttempts = 0
+        Task { @MainActor [weak self] in
+            guard let self, self.connectionGeneration == generation else { return }
+            _ = await self.handleFirstFrameWatchdogEvent(
+                .firstDecodedFrameArrived,
+                generation: generation
+            )
         }
     }
-    
-    fileprivate func setVideoSize(_ size: CGSize, generation: Int) {
+
+    func videoRenderDidMeasureFps(_ fps: Int, generation: Int) {
+        guard connectionGeneration == generation else { return }
+        // [DEBUG-swiftui-audit] OVERLOOK_DIAG_NO_FPS=1 skips the fps telemetry write.
+        guard DiagFlags.noFps == false else { return }
+        // Already quantized to whole frames the way the UI renders it, so the ≤ 2 Hz window only
+        // publishes when the displayed number actually moves.
+        telemetry.update { $0.videoFps = fps }
+    }
+
+    func videoRenderDidCaptureFrame(_ pixelBuffer: CVPixelBuffer, generation: Int) {
+        guard connectionGeneration == generation else { return }
+        guard isFrameCaptureEnabled else { return }
+        currentFrame = pixelBuffer
+    }
+
+    func videoRenderDidChangeSize(_ size: CGSize, generation: Int) {
+        setVideoSize(size, generation: generation)
+    }
+
+    func setVideoSize(_ size: CGSize, generation: Int) {
         guard connectionGeneration == generation else { return }
         if size.width > 0, size.height > 0, videoSize != size {
             videoSize = size
