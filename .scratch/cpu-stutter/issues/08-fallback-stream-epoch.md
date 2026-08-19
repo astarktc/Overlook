@@ -2,7 +2,7 @@
 
 **Found by:** adversarial review of ticket 06 (`AVSampleBufferDisplayLayer` renderer). Deliberately **not** fixed there because it is **pre-existing behavior, not a regression** — the `ConnectionGenerationVideoRenderer` that ticket 06 replaced had exactly the same gap.
 
-**Status:** ready-for-human — awaiting review of `fix/fallback-stream-epoch`. `VideoRenderControl.admitFrame` guards on generation, the render token (stream epoch) *and* H.265 frame provenance (`OverlookH265PixelBuffer`, tagged by our decoder and travelling with the frame — the token alone cannot refuse an abandoned-stream decode callback that begins after the fallback). The fallback path revokes H.265 admission before advancing the epoch (`flushDisplayAbandoningH265Stream`), the epoch transition publishes the control token before the decode-thread-visible state (interleaving proof in `advanceEpoch`), and first-frame delivery carries the token for revalidation at receipt. Unit tests cover the publication order, the provenance guard, the decoder's tagging, and the end-to-end fallback shape; full suite green.
+**Status:** done (2026-08-19)
 
 **Blocked by:** none
 
@@ -44,3 +44,9 @@ What is still missing is that the token is not consulted by the **signal** side:
 
 - Unit: the epoch tests above.
 - Live: force a fallback (H.265 preferred against a stream that will not deliver) with a frame in flight, and confirm the watchdog does not disarm on the abandoned stream's frame. `OVERLOOK_FORCE_DECODE_STARVATION` is the existing hook for arming the first-frame watchdog deliberately.
+
+## Comments
+
+- 2026-08-19 — Implemented on `fix/fallback-stream-epoch` (`ce81049` + review fixes `8178473` + polish). Mechanism: `VideoRenderControl.admitFrame` guards on generation, the render token (stream epoch), *and* H.265 frame provenance (`OverlookH265PixelBuffer`, tagged by our decoder, travelling with the frame). The fallback revokes H.265 admission before advancing the epoch (`flushDisplayAbandoningH265Stream`); the epoch transition publishes the control token before the decode-thread-visible state (interleaving proof in `advanceEpoch`); first-frame delivery carries the token and is revalidated at receipt.
+- Adversarial review (GPT-5.6-Sol, two passes): round 1 found 2 blockers (frame/stream identity; publication order) — both fixed in `8178473` and confirmed closed in round 2 ("mergeable: yes", interleavings independently re-derived, marker survival audited against WebRTC M150 source).
+- Accepted follow-up (review SHOULD-FIX, implementation confirmed correct): no end-to-end test pins the stale first-frame *delivery* revalidation (admit before fallback → deliver after epoch advance → manager must refuse reconnect-reset and watchdog event). `isCurrentEpoch` is tested directly; removing the receipt-side revalidation would not currently fail a test.

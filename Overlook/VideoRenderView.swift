@@ -883,9 +883,13 @@ final class VideoRenderView: NSView, RTCVideoRenderer {
     }
 
     /// Drops queued frames without changing the generation. The token still advances — on the
-    /// display side *and* the signal side — so frames already admitted for the stream being
-    /// abandoned can neither land after the flush nor stamp the health clock, count, or claim
-    /// to be the replacement stream's first decoded frame.
+    /// display side *and* the signal side — so a frame already admitted for the stream being
+    /// abandoned cannot land on the display after the flush, its clock stamp does not survive
+    /// (the fallback caller clears the clock right after this returns), and its first-frame
+    /// delivery is refused by token revalidation at receipt. Transient side effects that
+    /// completed during its admission (`signalGate` accounting, an OCR capture decision) are
+    /// NOT retracted — they are harmless within one connection and are not part of the
+    /// stream-identity contract.
     func flushDisplay() {
         engine.flush(token: advanceEpoch())
     }
@@ -932,8 +936,10 @@ final class VideoRenderView: NSView, RTCVideoRenderer {
     /// happens entirely after P — never across the transition. With the REVERSED order
     /// (`renderState` first) the interleaving R P A C wrongly admits: R reads the old token and
     /// A matches it against the control's not-yet-updated old token, so a stale frame is
-    /// admitted mid-transition, stamps the freshly-cleared clock and fires first-frame. That is
-    /// the order `epochMidTransitionHookForTesting` exists to pin.
+    /// admitted mid-transition, stamps the clock (which the fallback only clears AFTER this
+    /// returns — the stale stamp would then be wiped, but the queued first-frame event could
+    /// not be retracted) and fires first-frame. That is the order
+    /// `epochMidTransitionHookForTesting` exists to pin.
     private func advanceEpoch(generation: Int? = nil) -> VideoDisplayEngine.RenderToken {
         // Reserve the next token value without publishing it to the decode thread's read.
         let (token, newGeneration) = renderState.withLock { state in
@@ -942,7 +948,9 @@ final class VideoRenderView: NSView, RTCVideoRenderer {
             return (token, generation ?? state.generation)
         }
         control.setAdmittedToken(token)
+        #if DEBUG
         epochMidTransitionHookForTesting?()
+        #endif
         renderState.withLock { state in
             state.generation = newGeneration
             state.token = token
@@ -950,10 +958,12 @@ final class VideoRenderView: NSView, RTCVideoRenderer {
         return token
     }
 
+    #if DEBUG
     /// Test seam: runs between the two epoch publications (control token first, `renderState`
     /// second), so a test can observe — and pin — the publication order `advanceEpoch` proves
-    /// safe. Nil in production; the frame path never touches it.
+    /// safe. Nil in production, compiled out of Release; the frame path never touches it.
     var epochMidTransitionHookForTesting: (() -> Void)?
+    #endif
 
     /// The exact per-frame read `renderFrame` performs — a test seam for exercising the epoch
     /// transition's interleavings deterministically.
