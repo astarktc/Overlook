@@ -2,7 +2,7 @@
 
 **Found by:** adversarial review of ticket 06 (`AVSampleBufferDisplayLayer` renderer). Deliberately **not** fixed there because it is **pre-existing behavior, not a regression** — the `ConnectionGenerationVideoRenderer` that ticket 06 replaced had exactly the same gap.
 
-**Status:** ready-for-agent
+**Status:** in-review — `fix/fallback-stream-epoch`: `VideoRenderControl.admitFrame` now guards on the render token (stream epoch) alongside generation; `flushDisplay()`/`begin`/`end` publish the token to the control, and the fallback flush runs before the health-clock clear. Unit tests added; full suite green.
 
 **Blocked by:** none
 

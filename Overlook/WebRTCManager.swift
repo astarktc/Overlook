@@ -698,14 +698,19 @@ class WebRTCManager: NSObject, ObservableObject {
         guard let action = state.action else { return false }
         switch action {
         case .reissueVideoWatchRequest(let videoFormat):
+            // The replacement stream is a different codec (and possibly a different resolution);
+            // anything still queued for display belongs to the stream being abandoned. The flush
+            // also advances the stream epoch on the display side *and* the signal side
+            // (`VideoRenderControl`'s admitted token), and it must happen *before* the health
+            // clock is cleared below: otherwise a late in-flight frame from the abandoned
+            // stream could stamp the freshly-nil clock and claim to be the replacement
+            // stream's first decoded frame, disarming the first-frame watchdog.
+            videoView?.flushDisplay()
             // Give the replacement stream its own initial-frame health window.
             setLastVideoFrameTime(nil)
             setLastVideoFrameAgeSeconds(nil)
             connectedIceTime = CACurrentMediaTime()
             setStreamStalled(false)
-            // The replacement stream is a different codec (and possibly a different resolution);
-            // anything still queued for display belongs to the stream being abandoned.
-            videoView?.flushDisplay()
 
             do {
                 try await sendVideoWatchRequest(videoFormat: videoFormat)

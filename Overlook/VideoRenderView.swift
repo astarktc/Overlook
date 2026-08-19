@@ -27,20 +27,29 @@ import os
 final class VideoRenderControl: Sendable {
     /// What one decoded frame is allowed to do, decided in one lock acquisition.
     struct FrameAdmission: Equatable {
-        /// False when the frame belongs to a superseded connection: it is neither displayed,
-        /// counted, nor allowed to stamp the stream-health clock.
-        var isCurrentGeneration: Bool
+        /// False when the frame belongs to a superseded connection *or* a superseded stream
+        /// epoch (a codec fallback re-issued the Watch Request inside the same connection): it
+        /// is neither displayed, counted, nor allowed to stamp the stream-health clock.
+        var isAdmitted: Bool
         /// True while `OVERLOOK_FORCE_DECODE_STARVATION` suppresses frame-arrival signals for
         /// watchdog testing. The frame is still displayed — only the signals are withheld,
         /// which is exactly what the old main-actor `renderFrame` did.
         var signalsSuppressed: Bool
-        /// True for the first frame of this connection (drives the first-frame watchdog event).
+        /// True for the first decoded frame of the current *stream*: the first frame admitted
+        /// in the current stream epoch while the stream-health clock is nil.
+        ///
+        /// "First frame of the replacement stream" after a codec fallback means exactly this:
+        /// a frame whose `(generation, token)` was read by the decode thread *after* the
+        /// fallback advanced the epoch (`flushDisplay()`), never a late in-flight frame from
+        /// the abandoned stream. This is a local ordering guarantee, not a wire identity —
+        /// nothing here inspects SSRCs or decoder instances. It drives the first-frame
+        /// watchdog event, so the codec-selection policy depends on this meaning.
         var isFirstDecodedFrame: Bool
         /// Mirror of `WebRTCManager.isFrameCaptureEnabled` (OCR mode).
         var isFrameCaptureEnabled: Bool
 
         static let stale = FrameAdmission(
-            isCurrentGeneration: false,
+            isAdmitted: false,
             signalsSuppressed: false,
             isFirstDecodedFrame: false,
             isFrameCaptureEnabled: false
@@ -51,6 +60,12 @@ final class VideoRenderControl: Sendable {
         /// `Int.min` until the manager publishes a real connection generation, so a frame that
         /// somehow arrives before a connection exists can never be admitted.
         var generation: Int = .min
+        /// The stream epoch signals are currently admitted for. `.invalid` until the view arms
+        /// a real epoch, so a frame can never be admitted before rendering begins. The view
+        /// advances this in lockstep with the display epoch (`begin`/`end`/`flushDisplay`), so
+        /// the signal side and the display side agree by construction on which stream's frames
+        /// count.
+        var admittedToken: VideoDisplayEngine.RenderToken = .invalid
         var isFrameCaptureEnabled = false
         var suppressFrameArrivalSignals = false
         var lastFrameTime: CFTimeInterval?
@@ -62,6 +77,15 @@ final class VideoRenderControl: Sendable {
 
     func setGeneration(_ generation: Int) {
         state.withLock { $0.generation = generation }
+    }
+
+    /// Adopts a new stream epoch: from here on only frames carrying `token` are counted.
+    ///
+    /// Called by `VideoRenderView` whenever the display epoch advances, which is what keeps a
+    /// late frame from the abandoned stream (same connection, pre-fallback epoch) from
+    /// stamping the health clock or claiming `isFirstDecodedFrame`.
+    func setAdmittedToken(_ token: VideoDisplayEngine.RenderToken) {
+        state.withLock { $0.admittedToken = token }
     }
 
     func setFrameCaptureEnabled(_ enabled: Bool) {
@@ -89,15 +113,21 @@ final class VideoRenderControl: Sendable {
         state.withLock { $0.generation == generation }
     }
 
-    /// One lock acquisition per decoded frame: applies the generation guard, reads the gates and
-    /// stamps the stream-health clock.
-    func admitFrame(generation: Int, at time: CFTimeInterval) -> FrameAdmission {
+    /// One lock acquisition per decoded frame: applies the generation *and* stream-epoch
+    /// guards, reads the gates and stamps the stream-health clock.
+    func admitFrame(
+        generation: Int,
+        token: VideoDisplayEngine.RenderToken,
+        at time: CFTimeInterval
+    ) -> FrameAdmission {
         state.withLock { state in
-            guard state.generation == generation else { return .stale }
+            guard state.generation == generation,
+                  state.admittedToken == token,
+                  token != .invalid else { return .stale }
 
             if state.suppressFrameArrivalSignals {
                 return FrameAdmission(
-                    isCurrentGeneration: true,
+                    isAdmitted: true,
                     signalsSuppressed: true,
                     isFirstDecodedFrame: false,
                     isFrameCaptureEnabled: false
@@ -108,7 +138,7 @@ final class VideoRenderControl: Sendable {
             state.lastFrameTime = time
 
             return FrameAdmission(
-                isCurrentGeneration: true,
+                isAdmitted: true,
                 signalsSuppressed: false,
                 isFirstDecodedFrame: isFirstDecodedFrame,
                 isFrameCaptureEnabled: state.isFrameCaptureEnabled
@@ -775,7 +805,7 @@ final class VideoRenderView: NSView, RTCVideoRenderer {
     /// from a connection that has since been torn down — are dropped without being displayed,
     /// counted or allowed to stamp the stream-health clock.
     func beginRendering(generation: Int) {
-        let token = advanceToken(generation: generation)
+        let token = advanceEpoch(generation: generation)
         signalGate.reset()
         captureSlot.clear()
         engine.begin(token: token)
@@ -788,27 +818,33 @@ final class VideoRenderView: NSView, RTCVideoRenderer {
     /// admitted a moment ago carries the old token, so the enqueue queue drops it after the flush
     /// instead of presenting it.
     func endRendering() {
-        _ = advanceToken(generation: .min)
+        _ = advanceEpoch(generation: .min)
         signalGate.reset()
         captureSlot.clear()
         engine.end()
     }
 
-    /// Drops queued frames without changing the generation. The token still advances, so frames
-    /// already admitted for the stream being abandoned cannot land after the flush.
+    /// Drops queued frames without changing the generation. The token still advances — on the
+    /// display side *and* the signal side — so frames already admitted for the stream being
+    /// abandoned can neither land after the flush nor stamp the health clock, count, or claim
+    /// to be the replacement stream's first decoded frame.
     func flushDisplay() {
-        let token = renderState.withLock { state -> VideoDisplayEngine.RenderToken in
-            Self.advanceToken(in: &state, generation: state.generation)
-        }
-        engine.flush(token: token)
+        engine.flush(token: advanceEpoch())
     }
 
-    /// Moves the view to a fresh epoch and returns its token. Callers are on the main actor; the
-    /// lock is what the decode thread reads against.
-    private func advanceToken(generation: Int) -> VideoDisplayEngine.RenderToken {
-        renderState.withLock { state in
-            Self.advanceToken(in: &state, generation: generation)
+    /// Moves the view to a fresh epoch and returns its token, publishing the same token to the
+    /// control so the display epoch and the signal epoch advance in step by construction.
+    /// Callers are on the main actor; the lock is what the decode thread reads against.
+    ///
+    /// `renderState` and the control are updated one after the other, not atomically. That is
+    /// safe-fail: a frame that reads across the transition carries a token the control has not
+    /// adopted yet (or no longer admits) and is dropped — it can never be wrongly admitted.
+    private func advanceEpoch(generation: Int? = nil) -> VideoDisplayEngine.RenderToken {
+        let token = renderState.withLock { state in
+            Self.advanceToken(in: &state, generation: generation ?? state.generation)
         }
+        control.setAdmittedToken(token)
+        return token
     }
 
     private static nonisolated func advanceToken(
@@ -832,8 +868,8 @@ final class VideoRenderView: NSView, RTCVideoRenderer {
 
         let (generation, token) = renderState.withLock { ($0.generation, $0.token) }
         let now = CACurrentMediaTime()
-        let admission = control.admitFrame(generation: generation, at: now)
-        guard admission.isCurrentGeneration else { return }
+        let admission = control.admitFrame(generation: generation, token: token, at: now)
+        guard admission.isAdmitted else { return }
 
         if frame.rotation != ._0 {
             VideoRenderView.logRotationOnce(frame.rotation)
