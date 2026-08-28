@@ -104,6 +104,22 @@ modes directly and works in mirrored mode. Verified working config: BetterDispla
 60.00Hz", mirroring on (Comet = master mirror), Overlook still streams 1440p60. Larger text,
 Retina rendering, no device-side changes.
 
+**Black stream + display missing from the work Mac's Displays settings (fixed 2026-08-28):**
+macOS 26 can wedge a display into a persistent "rejected" state (BetterDisplay shows
+"Not detected (past disconnected)"): hotplug events fire (built-in screen DPI-shuffles),
+IOKit reads the EDID (`DisplayHints` shows VX2478-2), but WindowServer never onlines it —
+and the state **survives reboots and power cycles** of Mac, dock, and Comet. Overlook then
+faithfully streams the black no-output capture while status says "Connected H.265" (the
+pipeline is fine — verify with the H265 live-wire diagnostic test if in doubt). Fix:
+delete BOTH windowserver display prefs and reboot —
+`/Library/Preferences/com.apple.windowserver.displays.plist` (sudo) and
+`~/Library/Preferences/ByHost/com.apple.windowserver.displays.*.plist` — cost is only
+re-doing display arrangement prefs. Useful lever while diagnosing: force an HDMI hotplug
+remotely with `echo 1 > /sys/bus/i2c/devices/1-002b/reset` on the Comet (also:
+`hotplug_status` sysfs reads 0 even with an active link — don't trust it;
+`resolution`/`real_resolution` go stale after signal loss — only a fresh dmesg
+"Resolution:" line after reset proves live signal).
+
 **Do NOT attempt EDID reflashing on the LT6911C** (the abandoned "option A"): the chip's
 EDID-override flash region behaves write-once — `lt6911c_upgrade -e` reports success but the
 served EDID never changes (verified through chip reset, device reboot, kvmd stopped, and HDMI
