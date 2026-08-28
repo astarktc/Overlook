@@ -24,6 +24,7 @@
 		01000018 /* OCRViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000017 /* OCRViews.swift */; };
 		01000019 /* ConnectSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000018 /* ConnectSheets.swift */; };
 		0100004E /* DevicePasswordStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200004E /* DevicePasswordStore.swift */; };
+		0100004F /* DevicePasswordStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200004E /* DevicePasswordStore.swift */; };
 		0100001A /* ContentControlBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000019 /* ContentControlBar.swift */; };
 		0100001B /* VideoSurfaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200001A /* VideoSurfaceView.swift */; };
 		0100001C /* StatusBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200001B /* StatusBarView.swift */; };
@@ -428,6 +429,7 @@
 				0100004D /* VideoRenderViewTests.swift in Sources */,
 				01000045 /* StreamTelemetry.swift in Sources */,
 				0100003C /* KVMDeviceManager.swift in Sources */,
+				0100004F /* DevicePasswordStore.swift in Sources */,
 				0100003D /* GLKVMClient.swift in Sources */,
 				0100003E /* JSONValue.swift in Sources */,
 				0100003F /* WebRTCAudioDevice.swift in Sources */,
@@ -579,7 +581,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Overlook/Preview Content\"";
 				DEVELOPMENT_TEAM = "";
-				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_HARDENED_RUNTIME = NO;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Overlook/Info.plist;
@@ -615,7 +617,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Overlook/Preview Content\"";
 				DEVELOPMENT_TEAM = "";
-				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_HARDENED_RUNTIME = NO;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Overlook/Info.plist;
