@@ -22,10 +22,12 @@ struct ContentView: View {
     @State private var manualPort = "443"
 
     @State private var manualPassword = ""
+    @State private var manualSavePassword = false
 
     @State private var showingPasswordPrompt = false
     @State private var pendingPasswordDevice: KVMDevice?
     @State private var pendingPassword = ""
+    @State private var pendingSavePassword = false
     @State private var connectionErrorMessage: String?
 
     @State private var suppressDeviceAutoConnect = false
@@ -386,6 +388,7 @@ struct ContentView: View {
                 hostPort: $manualHostPort,
                 port: $manualPort,
                 password: $manualPassword,
+                savePassword: $manualSavePassword,
                 onConnect: {
                     manualConnect()
                 }
@@ -395,13 +398,14 @@ struct ContentView: View {
             PasswordPromptSheet(
                 isPresented: $showingPasswordPrompt,
                 password: $pendingPassword,
+                savePassword: $pendingSavePassword,
                 onCancel: {
                     pendingPasswordDevice = nil
                     pendingPassword = ""
                 },
                 onConnect: {
                     if let device = pendingPasswordDevice {
-                        connectToDevice(device, password: pendingPassword)
+                        connectToDevice(device, password: pendingPassword, savePassword: pendingSavePassword)
                     }
                     pendingPasswordDevice = nil
                     pendingPassword = ""
@@ -451,10 +455,14 @@ struct ContentView: View {
         }
     }
 
-    private func connectToDevice(_ device: KVMDevice, password: String? = nil) {
+    private func connectToDevice(_ device: KVMDevice, password: String? = nil, savePassword: Bool = false) {
         Task {
             do {
-                let connectedDevice = try await kvmDeviceManager.connectToDevice(device, password: password)
+                let connectedDevice = try await kvmDeviceManager.connectToDevice(
+                    device,
+                    password: password,
+                    savePassword: savePassword
+                )
                 await MainActor.run {
                     suppressDeviceAutoConnect = true
                     selectedDevice = connectedDevice
@@ -528,7 +536,7 @@ struct ContentView: View {
         }
 
         let password = manualPassword.trimmingCharacters(in: .whitespacesAndNewlines)
-        connectToDevice(device, password: password.isEmpty ? nil : password)
+        connectToDevice(device, password: password.isEmpty ? nil : password, savePassword: manualSavePassword)
     }
 
     private func describeConnectionError(_ error: Error) -> String {

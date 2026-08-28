@@ -5,6 +5,7 @@ struct ManualConnectSheet: View {
     @Binding var hostPort: String
     @Binding var port: String
     @Binding var password: String
+    @Binding var savePassword: Bool
 
     let onConnect: () -> Void
 
@@ -21,6 +22,8 @@ struct ManualConnectSheet: View {
 
             SecureField("Password", text: $password)
                 .textFieldStyle(.roundedBorder)
+
+            Toggle("Save password for this device", isOn: $savePassword)
 
             HStack {
                 Spacer()
@@ -42,6 +45,7 @@ struct ManualConnectSheet: View {
 struct PasswordPromptSheet: View {
     @Binding var isPresented: Bool
     @Binding var password: String
+    @Binding var savePassword: Bool
 
     let onCancel: () -> Void
     let onConnect: () -> Void
@@ -53,6 +57,8 @@ struct PasswordPromptSheet: View {
 
             SecureField("Password", text: $password)
                 .textFieldStyle(.roundedBorder)
+
+            Toggle("Save password for this device", isOn: $savePassword)
 
             HStack {
                 Spacer()

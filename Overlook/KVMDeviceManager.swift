@@ -4,6 +4,7 @@ import Combine
 import CryptoKit
 
 @MainActor
+// swiftlint:disable:next type_body_length
 final class KVMDeviceManager: NSObject, ObservableObject {
     @Published var availableDevices: [KVMDevice] = []
     @Published var connectedDevice: KVMDevice?
@@ -163,7 +164,7 @@ final class KVMDeviceManager: NSObject, ObservableObject {
         let browser = NWBrowser(for: .bonjourWithTXTRecord(type: "_comet._tcp", domain: nil), using: .tcp)
         
         return await withCheckedContinuation { continuation in
-            browser.browseResultsChangedHandler = { results, changes in
+            browser.browseResultsChangedHandler = { results, _ in
                 for result in results {
                     let device = Self.createGLiNetDevice(from: result.endpoint)
                     Task {
@@ -223,7 +224,7 @@ final class KVMDeviceManager: NSObject, ObservableObject {
         let browser = NWBrowser(for: .bonjourWithTXTRecord(type: "_kvm._tcp", domain: nil), using: .tcp)
         
         return await withCheckedContinuation { continuation in
-            browser.browseResultsChangedHandler = { results, changes in
+            browser.browseResultsChangedHandler = { results, _ in
                 for result in results {
                     let device = Self.createGenericKVMDevice(from: result.endpoint)
                     Task {
@@ -316,12 +317,12 @@ final class KVMDeviceManager: NSObject, ObservableObject {
             defer { freeifaddrs(ifaddr) }
 
             var ptr: UnsafeMutablePointer<ifaddrs>? = first
-            while let p = ptr {
-                defer { ptr = p.pointee.ifa_next }
-                guard let addr = p.pointee.ifa_addr else { continue }
+            while let entry = ptr {
+                defer { ptr = entry.pointee.ifa_next }
+                guard let addr = entry.pointee.ifa_addr else { continue }
                 if addr.pointee.sa_family != UInt8(AF_INET) { continue }
 
-                let flags = Int32(p.pointee.ifa_flags)
+                let flags = Int32(entry.pointee.ifa_flags)
                 if (flags & IFF_LOOPBACK) != 0 { continue }
 
                 var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
@@ -362,8 +363,8 @@ final class KVMDeviceManager: NSObject, ObservableObject {
         prefixes.insert("192.168.200")
 
         for prefix in prefixes {
-            for i in 1...254 {
-                hosts.append("\(prefix).\(i)")
+            for hostOctet in 1...254 {
+                hosts.append("\(prefix).\(hostOctet)")
             }
         }
 
@@ -620,6 +621,8 @@ final class KVMDeviceManager: NSObject, ObservableObject {
         current.removeAll { $0.host == host && $0.port == port }
         writePersistedDevices(current)
 
+        DevicePasswordStore.delete(host: host, port: port)
+
         availableDevices.removeAll { $0.host == host && $0.port == port }
         if connectedDevice?.host == host, connectedDevice?.port == port {
             connectedDevice = nil
@@ -628,7 +631,13 @@ final class KVMDeviceManager: NSObject, ObservableObject {
     }
     
     @discardableResult
-    func connectToDevice(_ device: KVMDevice, authToken: String? = nil, password: String? = nil, user: String = "admin") async throws -> KVMDevice {
+    func connectToDevice(
+        _ device: KVMDevice,
+        authToken: String? = nil,
+        password: String? = nil,
+        user: String = "admin",
+        savePassword: Bool = false
+    ) async throws -> KVMDevice {
         // Validate device connection
         let isValid = try await validateDeviceConnection(device)
         guard isValid else {
@@ -658,9 +667,28 @@ final class KVMDeviceManager: NSObject, ObservableObject {
         do {
             try await client.authCheck()
         } catch {
-            if let password, !password.isEmpty {
-                let token = try await client.authLogin(user: user, password: password)
+            // Only treat a genuine rejection from the device as "auth expired".
+            // Network/transport failures must never lead to a password prompt.
+            guard Self.isAuthRejection(error) else {
+                throw KVMError.connectionFailed
+            }
+
+            let provided = (password?.isEmpty == false) ? password : nil
+            let saved = provided == nil
+                ? DevicePasswordStore.load(host: finalDevice.host, port: finalDevice.port)
+                : nil
+
+            guard let candidate = provided ?? saved else {
+                throw KVMError.authenticationFailed
+            }
+
+            do {
+                let token = try await client.authLogin(user: user, password: candidate)
                 client.authToken = token
+
+                if provided != nil, savePassword {
+                    DevicePasswordStore.save(candidate, host: finalDevice.host, port: finalDevice.port)
+                }
 
                 var updated = finalDevice
                 updated.authToken = token
@@ -668,7 +696,15 @@ final class KVMDeviceManager: NSObject, ObservableObject {
                     availableDevices[index] = updated
                 }
                 finalDevice = updated
-            } else {
+            } catch {
+                guard Self.isAuthRejection(error) else {
+                    // Login failed for transport reasons; the password may be fine.
+                    throw KVMError.connectionFailed
+                }
+                if saved != nil {
+                    // Stale saved password — drop it so the operator gets re-prompted.
+                    DevicePasswordStore.delete(host: finalDevice.host, port: finalDevice.port)
+                }
                 throw KVMError.authenticationFailed
             }
         }
@@ -677,6 +713,17 @@ final class KVMDeviceManager: NSObject, ObservableObject {
         connectedDevice = persisted
         glkvmClient = client
         return persisted
+    }
+
+    /// True only when the device itself rejected the credentials/token: an HTTP
+    /// 401/403, or an application-level `ok=false` rejection on a 2xx response
+    /// (how the GL.iNet login endpoint reports a wrong password). URL/network
+    /// errors and 5xx responses are NOT auth rejections.
+    private static func isAuthRejection(_ error: Error) -> Bool {
+        if case GLKVMClient.ClientError.httpError(let statusCode, _) = error {
+            return statusCode == 401 || statusCode == 403 || (200...299).contains(statusCode)
+        }
+        return false
     }
 
     private func persistDevice(_ device: KVMDevice) -> KVMDevice {

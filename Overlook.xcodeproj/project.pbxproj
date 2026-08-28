@@ -23,6 +23,7 @@
 		01000017 /* WebUISettingsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000016 /* WebUISettingsPanel.swift */; };
 		01000018 /* OCRViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000017 /* OCRViews.swift */; };
 		01000019 /* ConnectSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000018 /* ConnectSheets.swift */; };
+		0100004E /* DevicePasswordStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200004E /* DevicePasswordStore.swift */; };
 		0100001A /* ContentControlBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000019 /* ContentControlBar.swift */; };
 		0100001B /* VideoSurfaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200001A /* VideoSurfaceView.swift */; };
 		0100001C /* StatusBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0200001B /* StatusBarView.swift */; };
@@ -92,6 +93,7 @@
 		02000016 /* WebUISettingsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebUISettingsPanel.swift; sourceTree = "<group>"; };
 		02000017 /* OCRViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCRViews.swift; sourceTree = "<group>"; };
 		02000018 /* ConnectSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectSheets.swift; sourceTree = "<group>"; };
+		0200004E /* DevicePasswordStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevicePasswordStore.swift; sourceTree = "<group>"; };
 		02000019 /* ContentControlBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentControlBar.swift; sourceTree = "<group>"; };
 		0200001A /* VideoSurfaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoSurfaceView.swift; sourceTree = "<group>"; };
 		0200001B /* StatusBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarView.swift; sourceTree = "<group>"; };
@@ -189,6 +191,7 @@
 				02000039 /* StreamTelemetry.swift */,
 				02000017 /* OCRViews.swift */,
 				02000018 /* ConnectSheets.swift */,
+				0200004E /* DevicePasswordStore.swift */,
 				02000016 /* WebUISettingsPanel.swift */,
 				02000015 /* GLKVMClient.swift */,
 				02000006 /* WebRTCManager.swift */,
@@ -390,6 +393,7 @@
 				01000017 /* WebUISettingsPanel.swift in Sources */,
 				01000018 /* OCRViews.swift in Sources */,
 				01000019 /* ConnectSheets.swift in Sources */,
+				0100004E /* DevicePasswordStore.swift in Sources */,
 				01000015 /* GLKVMClient.swift in Sources */,
 				01000006 /* WebRTCManager.swift in Sources */,
 				0100001D /* CoreAudioDevices.swift in Sources */,
