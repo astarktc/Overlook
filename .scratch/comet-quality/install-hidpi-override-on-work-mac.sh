@@ -2,6 +2,11 @@
 # HiDPI override installer — run ON THE WORK MAC (the Mac plugged into the Comet).
 # Adds Retina "looks like" scaled modes for the Comet's virtual display (ViewSonic
 # VX2478-2 identity, vendor 0x5a63 / product 0x2f34, native 2560x1440@60).
+#
+# DisplayProductName deliberately matches the wire EDID ("VX2478-2") so every
+# surface (EDID, override, system_profiler, MDM inventory) shows one consistent,
+# ordinary-monitor identity. Do NOT put "KVM" or "Comet" in this name — the
+# override name is what MDM hardware inventory reports (renamed 2026-08-28).
 # Wire stays 2560x1440@60; macOS renders a 2x framebuffer and downscales (smoother
 # text/UI — supersampling, not true Retina detail).
 #
@@ -18,7 +23,7 @@ cat > "$DIR/DisplayProductID-2f34" << 'PLIST'
 <plist version="1.0">
 <dict>
 	<key>DisplayProductName</key>
-	<string>Comet KVM (HiDPI)</string>
+	<string>VX2478-2</string>
 	<key>DisplayProductID</key>
 	<integer>12084</integer>
 	<key>DisplayVendorID</key>

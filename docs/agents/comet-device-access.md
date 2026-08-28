@@ -86,7 +86,12 @@ BDA still owns device-side state tracking and mirrors milestones to LAB-28.
 The work Mac (`ssh mac-uni-auto`, macOS 26.6.1) uses a `scale-resolutions` override plist for
 the Comet's display identity (ViewSonic vendor `5a63` / product `2f34`) at
 `/Library/Displays/Contents/Resources/Overrides/DisplayVendorID-5a63/DisplayProductID-2f34`
-— installer + EDID backup in `.scratch/comet-quality/`. Wire stays 2560×1440@60; macOS renders
+— installer + EDID backup in `.scratch/comet-quality/`. **The override's `DisplayProductName`
+must stay "VX2478-2"** (renamed from "Comet KVM (HiDPI)" 2026-08-28): the override name is
+what macOS — and the work Mac's MDM (Iru/Kandji) hardware inventory — reports for the
+display, so it must match the wire EDID's ordinary-monitor identity, never "KVM"/"Comet".
+(The wire EDID itself is immutable — see the reflash warning below — so the ViewSonic
+identity is fixed; the Mac-side name is the only branding surface under our control.) Wire stays 2560×1440@60; macOS renders
 a 2× framebuffer (supersampling). If the Comet's EDID identity ever changes, the override path
 must change with it.
 
